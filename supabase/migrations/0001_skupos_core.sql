@@ -6,7 +6,6 @@
 -- przyjęć się nie kasuje — tylko anuluje (ślad dla kontroli).
 -- Uruchomić na NOWYM projekcie Supabase (region eu-central-1 Frankfurt).
 -- ════════════════════════════════════════════════════════════════════
-create extension if not exists pgcrypto;
 
 -- ── Firmy i ludzie ──────────────────────────────────────────────────
 create table public.firmy (
@@ -32,7 +31,7 @@ create table public.profile (
 create index on public.profile(firma_id);
 
 create table public.zaproszenia (
-  kod text primary key default encode(gen_random_bytes(9),'base64'),
+  kod text primary key default upper(substr(replace(gen_random_uuid()::text,'-',''),1,10)),
   firma_id uuid not null references public.firmy(id) on delete cascade,
   rola public.rola not null,
   wazne_do timestamptz not null default now() + interval '7 days',
