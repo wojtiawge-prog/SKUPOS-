@@ -18,7 +18,12 @@ assert.equal(txRows[1].suma, 1890); assert.equal(txRows[1].masa, 1503);
 const round = rowsToTx(txRows, poz, kl, back);
 const strip = (t) => ({ id: t.id, no: t.no, ts: t.ts, kind: t.kind, payment: t.payment, plate: t.plate, osoba: t.osoba, firma: t.firma, pos: t.pos.map(({ matId, n, w, price }) => ({ matId, n, w, price })) });
 assert.deepEqual(round.map(strip).sort((a, b) => a.ts - b.ts), txs.map(strip));
+// grupa towaru wraca z cennika (bez niej dokument FPO nie zna kodu odpadu); pola FPO produkt/uwagi przechodzą w obie strony
+const t3 = { id: "t3", no: "FPO/2026/11/0002", ts: Date.parse("2026-11-22T08:00:00Z"), kind: "FPO", payment: "gotowka", plate: "", produkt: "Rury i rynny", uwagi: "mokre", osoba: { imie: "A", nazwisko: "B", adres: "C", dowod: "D1" }, pos: [{ matId: "m_cu1", n: "Miedź 1A", w: 2, price: 30 }] };
+const r3 = txToRows(t3, F, "k9", mm); assert.equal(r3.tx.produkt, "Rury i rynny");
+const back3 = rowsToTx([{ ...r3.tx, id: "x9" }], r3.pozycje.map((p) => ({ ...p, transakcja_id: "x9" })), [{ id: "k9", typ: "osoba" }], back, { db0: "CU", db1: "FE" })[0];
+assert.equal(back3.pos[0].g, "CU"); assert.equal(back3.produkt, "Rury i rynny"); assert.equal(back3.uwagi, "mokre");
 const d = { id: "d1", matId: "m_fe1", w: 900, contractor: "Cognor", dateKey: "2026-11-22", ts: Date.parse("2026-11-22T12:00:00Z") };
 const dr = rowToDisp({ ...dispToRow(d, F, mm), id: "w1", created_at: "2026-11-22T12:00:00Z" }, back);
 assert.deepEqual({ id: dr.id, matId: dr.matId, w: dr.w, contractor: dr.contractor, dateKey: dr.dateKey }, { id: "d1", matId: "m_fe1", w: 900, contractor: "Cognor", dateKey: "2026-11-22" });
-console.log("datalayer: mapowanie w obie strony OK (cennik, klienci, przyjęcia z pozycjami, wydania)");
+console.log("datalayer: mapowanie w obie strony OK (cennik, klienci, przyjęcia z pozycjami, grupa towaru, produkt/uwagi FPO, wydania)");

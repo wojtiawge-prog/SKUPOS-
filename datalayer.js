@@ -18,7 +18,7 @@ export const klientToRow = (t, firma_id) => t.firma
   : { firma_id, app_id: klientKey(t), typ: "osoba", imie: (t.osoba || {}).imie || "", nazwisko: (t.osoba || {}).nazwisko || "", adres: (t.osoba || {}).adres || "", dowod_nr: (t.osoba || {}).dowod || null, rejestracje: t.plate ? [t.plate] : [] };
 
 export const txToRows = (t, firma_id, klient_id, matIdByApp) => ({
-  tx: { firma_id, app_id: t.id, nr: t.no || null, rodzaj: t.kind === "KPO" ? "KPO" : "FPO", klient_id, rejestracja: t.plate || null, platnosc: ["gotowka", "przelew", "blik"].includes(t.payment) ? t.payment : "gotowka", pochodzenie: t.zrodlo || null, oswiadczenie: !!(t.osw || t.kind === "KPO"), suma: r2((t.pos || []).reduce((a, p) => a + p.w * p.price, 0)), masa: r1((t.pos || []).reduce((a, p) => a + (+p.w || 0), 0)), created_at: new Date(t.ts).toISOString() },
+  tx: { firma_id, app_id: t.id, nr: t.no || null, rodzaj: t.kind === "KPO" ? "KPO" : "FPO", klient_id, rejestracja: t.plate || null, platnosc: ["gotowka", "przelew", "blik"].includes(t.payment) ? t.payment : "gotowka", pochodzenie: t.zrodlo || null, produkt: t.produkt || null, uwagi: t.uwagi || null, oswiadczenie: !!(t.osw || t.kind === "KPO"), suma: r2((t.pos || []).reduce((a, p) => a + p.w * p.price, 0)), masa: r1((t.pos || []).reduce((a, p) => a + (+p.w || 0), 0)), created_at: new Date(t.ts).toISOString() },
   pozycje: (t.pos || []).filter((p) => +p.w > 0).map((p) => ({ firma_id, towar_id: matIdByApp[p.matId] || null, nazwa: p.n, masa: r1(p.w), cena: r2(p.price) })),
 });
 
@@ -26,13 +26,14 @@ export const dispToRow = (d, firma_id, matIdByApp) => ({ firma_id, app_id: d.id,
 
 // ── wiersze → aplikacja ──
 export const rowToMat = (r) => ({ id: r.app_id || r.id, code: r.kod || undefined, n: r.nazwa, g: r.grupa, buy: +r.cena_skup, sell: +r.cena_sprzedaz, stock: 0, _dbId: r.id });
-export const rowsToTx = (txRows, pozRows, klienci, appIdByMatId) => {
+export const rowsToTx = (txRows, pozRows, klienci, appIdByMatId, grupaByMatId = {}) => {
   const byTx = {}; pozRows.forEach((p) => { (byTx[p.transakcja_id] = byTx[p.transakcja_id] || []).push(p); });
   const kl = {}; klienci.forEach((k) => { kl[k.id] = k; });
   return txRows.filter((t) => !t.anulowana).map((t) => {
     const k = kl[t.klient_id] || {};
     const base = { id: t.app_id || t.id, no: t.nr, ts: Date.parse(t.created_at), kind: t.rodzaj, payment: t.platnosc, plate: t.rejestracja || "", zrodlo: t.pochodzenie || "", _dbId: t.id,
-      pos: (byTx[t.id] || []).map((p) => ({ matId: appIdByMatId[p.towar_id] || p.towar_id, n: p.nazwa, g: "", w: +p.masa, price: +p.cena })) };
+      ...(t.produkt ? { produkt: t.produkt } : {}), ...(t.uwagi ? { uwagi: t.uwagi } : {}),
+      pos: (byTx[t.id] || []).map((p) => ({ matId: appIdByMatId[p.towar_id] || p.towar_id, n: p.nazwa, g: grupaByMatId[p.towar_id] || "FE", w: +p.masa, price: +p.cena })) };
     if (t.rodzaj === "KPO") base.firma = { nazwa: k.nazwa || "", nip: k.nip || "" };
     else base.osoba = { imie: k.imie || "", nazwisko: k.nazwisko || "", adres: k.adres || "", dowod: k.dowod_nr || "" };
     return base;
@@ -50,8 +51,18 @@ export async function loadAll(sb) {
     all(() => sb.from("pozycje").select("*")),
     all(() => sb.from("wydania").select("*")),
   ]);
-  const appIdByMatId = {}; cennik.forEach((c) => { appIdByMatId[c.id] = c.app_id || c.id; });
-  return { materials: cennik.map(rowToMat), tx: rowsToTx(tx, poz, klienci, appIdByMatId), dispatch: wyd.map((r) => rowToDisp(r, appIdByMatId)) };
+  const appIdByMatId = {}, grupaByMatId = {}; cennik.forEach((c) => { appIdByMatId[c.id] = c.app_id || c.id; grupaByMatId[c.id] = c.grupa; });
+  return { materials: cennik.filter((c) => c.aktywny !== false).map(rowToMat), tx: rowsToTx(tx, poz, klienci, appIdByMatId, grupaByMatId), dispatch: wyd.map((r) => rowToDisp(r, appIdByMatId)) };
+}
+
+// ── zdjęcie dowodu → prywatny Storage „dowody/<firma>/<przyjęcie>/…”, wpis w tabeli zdjecia ──
+export async function zapiszZdjecie(sb, firma_id, transakcja_id, dataUrl) {
+  const m = dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/); if (!m) return;
+  const bin = atob(m[2]); const buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  const ext = m[1] === "image/png" ? "png" : m[1] === "image/webp" ? "webp" : "jpg";
+  const sciezka = `${firma_id}/${transakcja_id}/dowod.${ext}`;
+  const { error } = await sb.storage.from("dowody").upload(sciezka, new Blob([buf], { type: m[1] }), { contentType: m[1], upsert: false }); if (error) throw error;
+  const { error: e2 } = await sb.from("zdjecia").insert({ firma_id, transakcja_id, typ: "dowod", sciezka }); if (e2) throw e2;
 }
 
 // ── zapis: różnica między poprzednią a nową wartością klucza → tylko zmienione wiersze ──
@@ -78,6 +89,7 @@ export async function saveKey(sb, firma_id, key, next, prev) {
       const { tx, pozycje } = txToRows(t, firma_id, kid, mm);
       const { data, error } = await sb.from("transakcje").insert(tx).select("id,nr").single(); if (error) throw error;
       if (pozycje.length) { const { error: e2 } = await sb.from("pozycje").insert(pozycje.map((p) => ({ ...p, transakcja_id: data.id }))); if (e2) throw e2; }
+      if (typeof t.photo === "string" && t.photo.startsWith("data:image/")) { try { await zapiszZdjecie(sb, firma_id, data.id, t.photo); } catch (e) { console.error("SkupOS zdjęcie dowodu:", e); } }
     }
     // usunięcie w aplikacji = anulowanie w bazie (przyjęć się nie kasuje)
     for (const t of prev.filter((t) => !nIds.has(t.id))) {

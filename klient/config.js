@@ -1,6 +1,7 @@
-/* KONFIGURACJA — PORTAL KLIENTA (SkupOS). Ten sam kod co aplikacja właściciela. */
+/* KONFIGURACJA — PORTAL KLIENTA (SkupOS). Ten sam kod co aplikacja właściciela. Baza: SKUPOS-prod. */
 window.SUPA = {
-  url:  "https://ejqrzkvcwadvuwwdshso.supabase.co",
-  anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqcXJ6a3Zjd2FkdnV3d2RzaHNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNjkxNDEsImV4cCI6MjA5Nzg0NTE0MX0.fSNbyHb3wQdhYIB2lqfUJrxSX9QVjCpWLYSrAtj8nmc"
+  url:  "https://irwoybtcwclmdqihkkdg.supabase.co",
+  anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlyd295YnRjd2NsbWRxaWhra2RnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0NDM5OTMsImV4cCI6MjExMTAxOTk5M30.EnUWczElzllxioFMGxk9FxVNiM3d0FWpGn-SP7yw_Jc"
 };
 window.APP_MODE = "client";
+window.SKUPOS_DB = "tables";

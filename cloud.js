@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import App from "./app.js";
-import { loadAll, saveKey, TABLE_KEYS } from "./datalayer.js";
+import { loadAll, saveKey, TABLE_KEYS, rowToMat } from "./datalayer.js";
+// klucze, które nigdy nie idą do chmury (konta lokalne, hasła, sesja) — konta są w Supabase Auth
+const NIE_DO_CHMURY = ["sk_users_v2", "sk_session_v2", "sk_cloud_prof", "sk_pending_setup", "sk_req_synced"];
 const TRYB_TABEL = () => typeof window !== "undefined" && window.SKUPOS_DB === "tables";
 let _tq = Promise.resolve();
 /* ════════════════════════════════════════════════════════════════
@@ -31,8 +33,8 @@ const PRESETY = {
 function patchFetch() {
     window.__cloudLogout = async () => {
         try { const s = getSupa(); if (s) await s.auth.signOut(); } catch (e) { }
-        try { localStorage.removeItem("sk_session_v2"); } catch (e) { }
-        try { localStorage.removeItem("sk_cloud_prof"); } catch (e) { }
+        // wylogowanie czyści dane firmy z tego urządzenia (zostaje tryb i wygląd)
+        try { Object.keys(localStorage).forEach((k) => { if (k.indexOf("sk_") === 0 && ["sk_tryb", "sk_theme", "sk_big"].indexOf(k) === -1) localStorage.removeItem(k); }); } catch (e) { }
         try { location.reload(); } catch (e) { }
     };
     if (window.__aiPatched)
@@ -127,6 +129,7 @@ function patchStorage(firmaId) {
             }
             catch (e) { }
             if (k === "sk_req_v2") return; // zgłoszenia żyją w tabeli zgloszenia, nie w blobie
+            if (NIE_DO_CHMURY.indexOf(k) !== -1) return;
             if (TRYB_TABEL() && TABLE_KEYS.indexOf(k) !== -1) {
                 // nowa baza: cennik, przyjęcia i wydania idą do tabel (tylko zmienione rekordy, po kolei)
                 const s2 = getSupa();
@@ -226,14 +229,33 @@ async function rejestruj({ firma, email, haslo, imie }) {
 // ── Utworzenie firmy + profilu wlasciciela (wymaga aktywnej sesji) ──
 async function utworzKontoOwnera(uid, email, firma, imie) {
     const s = getSupa();
-    const { data: f, error: e2 } = await s.from("firmy").insert(firma).select().single();
-    if (e2) throw e2;
-    const { error: e3 } = await s.from("profile").insert({ id: uid, firma_id: f.id, imie, rola: "owner", login: email });
-    if (e3) throw e3;
-    const rows = Object.entries(PRESETY).map(([rola, perms]) => ({ firma_id: f.id, rola, perms }));
+    const adres = [firma.adres, firma.miasto].filter((x) => x && String(x).trim()).join(", ");
+    const { data: firmaId, error } = await s.rpc("zaloz_firme", { p_nazwa: firma.nazwa, p_nip: firma.nip || "", p_imie: imie, p_adres: adres, p_bdo: firma.bdo || "", p_login: email });
+    if (error) throw error;
+    const rows = Object.entries(PRESETY).map(([rola, perms]) => ({ firma_id: firmaId, rola, perms }));
     try { await s.from("uprawnienia_rol").upsert(rows, { onConflict: "firma_id,rola" }); } catch (e) { }
-    try { localStorage.setItem("sk_co_v2", JSON.stringify({ name: firma.nazwa, nip: firma.nip || "", bdo: firma.bdo || "", addr: [firma.adres, firma.miasto].filter(Boolean).join(", ") })); } catch (e) { }
-    return { id: uid, firma_id: f.id, imie, rola: "owner", login: email };
+    const co = { name: firma.nazwa, nip: firma.nip || "", bdo: firma.bdo || "", addr: adres };
+    try { localStorage.setItem("sk_co_v2", JSON.stringify(co)); } catch (e) { }
+    try { await s.from("ustawienia").upsert({ firma_id: firmaId, klucz: "sk_co_v2", wartosc: co }, { onConflict: "firma_id,klucz" }); } catch (e) { }
+    return { id: uid, firma_id: firmaId, imie, rola: "owner", login: email };
+}
+// ── Pracownik z kodem zaproszenia od szefa ──
+async function dolaczPracownika(uid, email, kod, imie) {
+    const s = getSupa();
+    const { data: firmaId, error } = await s.rpc("przyjmij_zaproszenie", { p_kod: kod, p_imie: imie, p_login: email });
+    if (error) throw error;
+    const { data: p } = await s.from("profile").select("*").eq("id", uid).single();
+    return p || { id: uid, firma_id: firmaId, imie, rola: "pracownik", login: email };
+}
+async function rejestrujPracownika({ email, haslo, imie, kod }) {
+    const s = getSupa();
+    const { data: a, error: e1 } = await s.auth.signUp({ email, password: haslo, options: { data: { imie, invite_code: kod } } });
+    if (e1) throw e1;
+    if (!a.session) {
+        try { localStorage.setItem("sk_pending_setup", JSON.stringify({ typ: "worker", kod, imie })); } catch (e) { }
+        return { pending: true };
+    }
+    return await dolaczPracownika(a.user.id, email, kod, imie);
 }
 // ── Dokonczenie konta po potwierdzeniu e-maila (naprawia tez stare, martwe konta) ──
 async function dokonczKonto(user) {
@@ -243,14 +265,17 @@ async function dokonczKonto(user) {
     const md = (user && user.user_metadata) || {};
     if (!pend && md.firma_setup) pend = { typ: "owner", firma: md.firma_setup, imie: md.imie || md.name || "" };
     if (!pend && md.client_setup) pend = { typ: "client", imie: md.name || md.imie || "", firmaId: md.client_setup };
+    if (!pend && md.invite_code) pend = { typ: "worker", imie: md.imie || md.name || "", kod: md.invite_code };
     if (!pend) return null;
     let prof = null;
     if (pend.typ === "client") {
         if (!pend.firmaId) return null;
         const s = getSupa();
-        const { error } = await s.from("profile").insert({ id: user.id, firma_id: pend.firmaId, imie: pend.imie || "Klient", rola: "client", login: user.email });
+        const { error } = await s.rpc("dolacz_jako_klient", { p_firma: pend.firmaId, p_imie: pend.imie || "Klient", p_login: user.email });
         if (error) throw error;
         prof = { id: user.id, firma_id: pend.firmaId, imie: pend.imie || "Klient", rola: "client", login: user.email };
+    } else if (pend.typ === "worker") {
+        prof = await dolaczPracownika(user.id, user.email, pend.kod, pend.imie || "");
     } else {
         prof = await utworzKontoOwnera(user.id, user.email, (pend.firma && pend.firma.nazwa ? pend.firma : { nazwa: "Mój skup" }), pend.imie || "Właściciel");
     }
@@ -354,7 +379,7 @@ async function rejestrujKlienta({ email, haslo, imie, firmaId }) {
         return { pending: true };
     }
     const uid = a.user.id;
-    const { error: e3 } = await s.from("profile").insert({ id: uid, firma_id: firmaId, imie, rola: "client", login: email });
+    const { error: e3 } = await s.rpc("dolacz_jako_klient", { p_firma: firmaId, p_imie: imie, p_login: email });
     if (e3) throw e3;
     return { id: uid, firma_id: firmaId, imie, rola: "client", login: email };
 }
@@ -365,6 +390,13 @@ async function przygotujKlienta(prof) {
         const { data } = await s.from("ustawienia").select("klucz,wartosc").eq("firma_id", prof.firma_id).in("klucz", ["sk_mat_v2", "sk_co_v2"]);
         (data || []).forEach((r) => { try { localStorage.setItem(r.klucz, JSON.stringify(r.wartosc)); } catch (e) { } });
     } catch (e) { }
+    if (TRYB_TABEL()) {
+        // nowa baza: cennik dla klienta prosto z tabeli (RLS: klient widzi tylko cennik swojego skupu)
+        try {
+            const { data, error } = await s.from("cennik").select("*").eq("firma_id", prof.firma_id).eq("aktywny", true).order("nazwa");
+            if (!error && data) localStorage.setItem("sk_mat_v2", JSON.stringify(data.map(rowToMat)));
+        } catch (e) { }
+    }
     await pullZgloszenia(prof);
     let users = [];
     try { users = JSON.parse(localStorage.getItem("sk_users_v2") || "[]"); } catch (e) { }
@@ -398,6 +430,19 @@ function AuthScreen({ onDone, onSetup, onPending }) {
     const [haslo, setHaslo] = useState("");
     const [imie, setImie] = useState("");
     const [firma, setFirma] = useState({ nazwa: "", nip: "", miasto: "", adres: "", bdo: "" });
+    const [kod, setKod] = useState(() => { try { return new URLSearchParams(location.search).get("kod") || ""; } catch (e) { return ""; } });
+    useEffect(() => { if (kod) setTryb("kod"); }, []);
+    const dolacz = async () => {
+        setErr("");
+        if (kod.trim().length < 6 || !imie.trim() || !email.includes("@") || haslo.length < 6) { setErr("Wpisz kod od szefa, imię, e-mail i hasło (min. 6 znaków)."); return; }
+        setBusy(true);
+        try {
+            const r = await rejestrujPracownika({ email: email.trim(), haslo, imie: imie.trim(), kod: kod.trim().toUpperCase() });
+            if (r && r.pending) { setBusy(false); if (onPending) onPending(email.trim()); return; }
+            await przygotuj(r);
+            onDone();
+        } catch (e) { setErr(tlumaczBlad(e)); setBusy(false); }
+    };
     const zaloguj = async () => {
         setErr("");
         setBusy(true);
@@ -441,8 +486,19 @@ function AuthScreen({ onDone, onSetup, onPending }) {
         React.createElement("div", { style: { paddingTop: 40, textAlign: "center" } },
             React.createElement(Logo, null),
             React.createElement("h1", { style: { fontSize: 25, fontWeight: 900, margin: "18px 0 4px", letterSpacing: "-.02em" } }, "SkupOS"),
-            React.createElement("div", { style: { fontSize: 13.5, color: MUTED } }, tryb === "login" ? "Zaloguj się do swojego skupu" : "Załóż konto firmy")),
-        tryb === "login" ? (React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { fontSize: 13.5, color: MUTED } }, tryb === "login" ? "Zaloguj się do swojego skupu" : tryb === "kod" ? "Dołącz do zespołu skupu" : "Załóż konto firmy")),
+        tryb === "kod" ? (React.createElement(React.Fragment, null,
+            React.createElement("label", { style: lbl }, "Kod zaproszenia od szefa"),
+            React.createElement("input", { style: { ...inp, fontFamily: "monospace", letterSpacing: ".12em", textTransform: "uppercase" }, value: kod, autoCapitalize: "characters", onChange: (e) => setKod(e.target.value), placeholder: "A1B2C3D4E5" }),
+            React.createElement("label", { style: lbl }, "Imi\u0119 i nazwisko"),
+            React.createElement("input", { style: inp, value: imie, onChange: (e) => setImie(e.target.value), placeholder: "Jan Kowalski" }),
+            React.createElement("label", { style: lbl }, "E-mail (login)"),
+            React.createElement("input", { style: inp, type: "email", value: email, autoCapitalize: "none", onChange: (e) => setEmail(e.target.value), placeholder: "jan@example.com" }),
+            React.createElement("label", { style: lbl }, "Has\u0142o ", React.createElement("span", { style: { color: FAINT, fontWeight: 400 } }, "\u00B7 min. 6 znak\u00F3w")),
+            React.createElement("input", { style: inp, type: "password", value: haslo, onChange: (e) => setHaslo(e.target.value), placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" }),
+            err && React.createElement("div", { style: { color: RED, fontSize: 12.5, fontWeight: 600, marginTop: 12 } }, err),
+            React.createElement("button", { style: { ...btn, marginTop: 22, opacity: busy ? .6 : 1 }, disabled: busy, onClick: dolacz }, busy ? "Do\u0142\u0105czam\u2026" : "Do\u0142\u0105cz do zespo\u0142u"),
+            React.createElement("button", { style: btnGhost, onClick: () => { setTryb("login"); setErr(""); } }, "Mam ju\u017C konto \u2014 zaloguj si\u0119"))) : tryb === "login" ? (React.createElement(React.Fragment, null,
             React.createElement("label", { style: lbl }, "E-mail"),
             React.createElement("input", { style: inp, type: "email", value: email, autoCapitalize: "none", onChange: (e) => setEmail(e.target.value), placeholder: "jan@firma.pl" }),
             React.createElement("label", { style: lbl }, "Has\u0142o"),
@@ -450,7 +506,8 @@ function AuthScreen({ onDone, onSetup, onPending }) {
                     zaloguj(); } }),
             err && React.createElement("div", { style: { color: RED, fontSize: 12.5, fontWeight: 600, marginTop: 12 } }, err),
             React.createElement("button", { style: { ...btn, marginTop: 22, opacity: busy ? .6 : 1 }, disabled: busy, onClick: zaloguj }, busy ? "Logowanie…" : "Zaloguj się"),
-            React.createElement("button", { style: btnGhost, onClick: () => { setTryb("rejestr"); setErr(""); } }, "Nie mam konta \u2014 za\u0142\u00F3\u017C firm\u0119"))) : (React.createElement(React.Fragment, null,
+            React.createElement("button", { style: btnGhost, onClick: () => { setTryb("rejestr"); setErr(""); } }, "Nie mam konta \u2014 za\u0142\u00F3\u017C firm\u0119"),
+            React.createElement("button", { style: { ...btnGhost, marginTop: 8 }, onClick: () => { setTryb("kod"); setErr(""); } }, "Mam kod zaproszenia od szefa"))) : (React.createElement(React.Fragment, null,
             React.createElement("label", { style: lbl }, "Nazwa firmy *"),
             React.createElement("input", { style: inp, value: firma.nazwa, onChange: (e) => setFirma({ ...firma, nazwa: e.target.value }), placeholder: "Skup metali Kowalski" }),
             React.createElement("div", { style: { display: "flex", gap: 10 } },
@@ -475,6 +532,10 @@ function AuthScreen({ onDone, onSetup, onPending }) {
 }
 function tlumaczBlad(e) {
     const m = String(e && e.message || e || "");
+    if (m.includes("Zaproszenie nieważne"))
+        return "Kod jest nieważny albo już użyty — poproś szefa o nowy.";
+    if (m.includes("Tylko właściciel"))
+        return "Tylko właściciel może to zrobić.";
     if (m.includes("Invalid login"))
         return "Błędny e-mail lub hasło.";
     if (m.includes("already registered") || m.includes("already been"))
@@ -553,38 +614,57 @@ function ClientAuth({ firmaId, onDone, onSetup, onPending }) {
         h("div", { style: { fontSize: 11, color: FAINT, textAlign: "center", marginTop: 22, lineHeight: 1.6 } }, "Do\u0142\u0105czasz do skupu, kt\u00F3ry wys\u0142a\u0142 Ci link.")
     );
 }
+const ROLE_ZAPR = [["pracownik", "Pracownik wagi"], ["operator", "Kierownik"], ["kierowca", "Kierowca"], ["accountant", "Ksi\u0119gowy"]];
 function InviteButton({ firmaId }) {
     const [open, setOpen] = useState(false);
-    const [copied, setCopied] = useState(false);
+    const [tab, setTab] = useState("pracownik");
+    const [copied, setCopied] = useState("");
     const [qr, setQr] = useState("");
+    const [rola, setRola] = useState("pracownik");
+    const [kod, setKod] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState("");
+    useEffect(() => { window.__cloudInvite = () => setOpen(true); return () => { try { delete window.__cloudInvite; } catch (e) { } }; }, []);
     const base = (window.KLIENT_URL && String(window.KLIENT_URL).trim()) ? String(window.KLIENT_URL).trim() : (location.origin + location.pathname);
     const link = base + (base.indexOf("?") >= 0 ? "&" : "?") + "firma=" + firmaId;
+    const appUrl = location.origin + location.pathname;
+    const linkKod = kod ? appUrl + "?tryb=chmura&kod=" + kod : "";
     useEffect(() => {
-        if (!open || qr) return;
+        if (!open || tab !== "klient" || qr) return;
         (async () => {
             try {
                 const m = await import("https://esm.sh/qrcode@1.5.3");
                 const fn = m.toDataURL || (m.default && m.default.toDataURL);
-                const d = await fn(link, { width: 260, margin: 1, color: { dark: "#0b0e12", light: "#ffffff" } });
-                setQr(d);
+                setQr(await fn(link, { width: 260, margin: 1, color: { dark: "#0b0e12", light: "#ffffff" } }));
             } catch (e) { }
         })();
-    }, [open]);
-    const copy = () => { try { navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch (e) { } };
-    return React.createElement(React.Fragment, null,
-        React.createElement("button", { onClick: () => setOpen(true), style: { position: "fixed", right: 14, bottom: 86, zIndex: 60, padding: "11px 15px", borderRadius: 99, border: "none", cursor: "pointer", background: "linear-gradient(135deg," + COPPER + ",#a85829)", color: "#fff", fontWeight: 800, fontSize: 13, boxShadow: "0 8px 22px " + COPPER + "66" } }, "+ Zapro\u015B klienta"),
-        open && React.createElement("div", { onClick: () => setOpen(false), style: { position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "auto" } },
-            React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { background: SURF, width: "100%", maxWidth: 440, borderRadius: "20px 20px 0 0", padding: "22px 18px calc(24px + env(safe-area-inset-bottom))", border: "1px solid " + LINE } },
-                React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: TEXT, marginBottom: 6 } }, "Zapro\u015B klienta"),
-                React.createElement("div", { style: { fontSize: 13, color: MUTED, lineHeight: 1.5, marginBottom: 16 } }, "Poka\u017C dostawcy ten kod QR lub wy\u015Blij link. Otworzy aplikacj\u0119 klienta, za\u0142o\u017Cy konto i b\u0119dzie podpi\u0119ty pod Tw\u00F3j skup."),
-                qr ? React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 16 } }, React.createElement("img", { src: qr, alt: "QR", style: { width: 220, height: 220, borderRadius: 14, background: "#fff", padding: 10 } })) : React.createElement("div", { style: { textAlign: "center", color: FAINT, fontSize: 12, padding: "30px 0", marginBottom: 8 } }, "Generuj\u0119 kod QR\u2026"),
-                React.createElement("div", { style: { background: SURF2, border: "1px solid " + LINE2, borderRadius: 12, padding: "12px 14px", fontSize: 12, color: TEXT, wordBreak: "break-all", fontFamily: "monospace" } }, link),
-                React.createElement("button", { onClick: copy, style: Object.assign({}, btn, { marginTop: 14, background: copied ? GREEN : "linear-gradient(135deg," + COPPER + ",#a85829)" }) }, copied ? "Skopiowano \u2713" : "Kopiuj link"),
-                React.createElement("div", { style: { fontSize: 10.5, color: FAINT, textAlign: "center", marginTop: 12, fontFamily: "monospace" } }, "ID skupu: " + firmaId),
-                React.createElement("button", { onClick: () => setOpen(false), style: btnGhost }, "Zamknij")
-            )
-        )
-    );
+    }, [open, tab]);
+    const copy = (t, k) => { try { navigator.clipboard.writeText(t); setCopied(k); setTimeout(() => setCopied(""), 1800); } catch (e) { } };
+    const nowyKod = async () => {
+        setErr(""); setBusy(true); setKod("");
+        try { const { data, error } = await getSupa().rpc("utworz_zaproszenie", { p_rola: rola }); if (error) throw error; setKod(data); }
+        catch (e) { setErr(tlumaczBlad(e)); }
+        setBusy(false);
+    };
+    if (!open) return null;
+    const tabBtn = (k, l) => h("button", { onClick: () => setTab(k), style: { flex: 1, padding: "11px 8px", borderRadius: 11, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14, background: tab === k ? COPPER : "transparent", color: tab === k ? "#fff" : MUTED } }, l);
+    return h("div", { onClick: () => setOpen(false), style: { position: "fixed", inset: 0, zIndex: 120, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "auto" } },
+        h("div", { onClick: (e) => e.stopPropagation(), style: { background: SURF, color: TEXT, width: "100%", maxWidth: 440, borderRadius: "20px 20px 0 0", padding: "22px 18px calc(24px + env(safe-area-inset-bottom))", border: "1px solid " + LINE } },
+            h("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 12 } }, "Zapro\u015B do skupu"),
+            h("div", { style: { display: "flex", gap: 4, padding: 4, borderRadius: 14, background: SURF2, marginBottom: 16 } }, tabBtn("pracownik", "Pracownik"), tabBtn("klient", "Klient")),
+            tab === "pracownik" ? h(React.Fragment, null,
+                h("div", { style: { fontSize: 14, color: MUTED, lineHeight: 1.5, marginBottom: 12 } }, "Wybierz rol\u0119 i wygeneruj kod. Pracownik otwiera link, zak\u0142ada konto i od razu widzi tylko to, co pozwala jego rola. Kod dzia\u0142a 7 dni i jeden raz."),
+                h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 } }, ROLE_ZAPR.map(([k, l]) => h("button", { key: k, onClick: () => { setRola(k); setKod(""); }, style: { minHeight: 46, borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 14, border: rola === k ? "2px solid " + COPPER : "1px solid " + LINE2, background: rola === k ? "rgba(200,116,63,.14)" : SURF2, color: rola === k ? COPPER : TEXT } }, l))),
+                kod ? h(React.Fragment, null,
+                    h("div", { style: { textAlign: "center", fontFamily: "monospace", fontSize: 30, fontWeight: 800, letterSpacing: ".14em", padding: "14px 0", borderRadius: 14, background: SURF2, border: "1px solid " + LINE2 } }, kod),
+                    h("button", { onClick: () => copy(linkKod, "kod"), style: Object.assign({}, btn, { marginTop: 12, background: copied === "kod" ? GREEN : btn.background }) }, copied === "kod" ? "Skopiowano \u2713" : "Kopiuj link z kodem")) :
+                    h("button", { onClick: nowyKod, disabled: busy, style: Object.assign({}, btn, { opacity: busy ? .6 : 1 }) }, busy ? "Generuj\u0119\u2026" : "Wygeneruj kod"),
+                err && h("div", { style: { color: RED, fontSize: 13, fontWeight: 600, marginTop: 10 } }, err)) :
+            h(React.Fragment, null,
+                h("div", { style: { fontSize: 14, color: MUTED, lineHeight: 1.5, marginBottom: 14 } }, "Poka\u017C dostawcy kod QR lub wy\u015Blij link. Zobaczy Tw\u00F3j cennik i wy\u015Ble zdj\u0119cie z\u0142omu do wyceny. Nie zobaczy przyj\u0119\u0107 ani innych klient\u00F3w."),
+                qr ? h("div", { style: { display: "flex", justifyContent: "center", marginBottom: 14 } }, h("img", { src: qr, alt: "QR", style: { width: 220, height: 220, borderRadius: 14, background: "#fff", padding: 10 } })) : h("div", { style: { textAlign: "center", color: FAINT, fontSize: 13, padding: "30px 0" } }, "Generuj\u0119 kod QR\u2026"),
+                h("button", { onClick: () => copy(link, "kl"), style: Object.assign({}, btn, { background: copied === "kl" ? GREEN : btn.background }) }, copied === "kl" ? "Skopiowano \u2713" : "Kopiuj link dla klienta")),
+            h("button", { onClick: () => setOpen(false), style: btnGhost }, "Zamknij")));
 }
 function ConfirmScreen({ email, onBack }) {
     return h(Shell, null,
