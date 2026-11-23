@@ -186,7 +186,7 @@ const demoTransactions = () => {
     const seq = {};
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth() - 1, 1); // 1. dzień poprzedniego miesiąca → pełny miesiąc w danych
-    const totalDays = Math.round((now - start) / 86400000);
+    const totalDays = Math.floor((now - start) / 86400000); // floor: bez transakcji z jutrzejszą datą
     for (let i = 0; i <= totalDays; i++) {
         const day = new Date(start);
         day.setDate(start.getDate() + i);
@@ -205,6 +205,7 @@ const demoTransactions = () => {
             const kind = Math.random() < 0.55 ? "FPO" : "KPO";
             const ts = new Date(day);
             ts.setHours(Math.floor(rnd(7, 18)), Math.floor(rnd(0, 59)), 0, 0);
+            if (ts.getTime() > Date.now()) ts.setTime(Date.now() - Math.floor(rnd(5, 300)) * 60000); // dziś: tylko godziny, które już minęły
             const npos = Math.random() < 0.5 ? 1 : (Math.random() < 0.82 ? 2 : 3);
             const used = {};
             const pos = [];
@@ -270,6 +271,7 @@ const seedUsers = () => [
 const ROLE_LABEL = { owner: "Właściciel", operator: "Kierownik", kierowca: "Kierowca", pracownik: "Pracownik", controller: "Kontroler", marketing: "Marketing", accountant: "Księgowy", client: "Klient" };
 // Uprawnienia konfigurowalne przez właściciela (per rola)
 const PERM_KEYS = [
+    ["intake", "Przyjęcia na wadze (wystawianie FPO/KPO)"],
     ["transactions", "Transakcje (lista FPO/KPO)"],
     ["cennikView", "Cennik — podgląd"],
     ["cennikEdit", "Cennik — zmiana cen"],
@@ -284,8 +286,8 @@ const PERM_KEYS = [
 ];
 const BASE_PERMS = { transactions: false, cennikView: false, cennikEdit: false, magazyn: false, reports: false, controls: false, requests: false, marketing: false, accounting: false, pickups: false, companyData: false };
 const DEFAULT_PERMS = {
-    operator: { ...BASE_PERMS, transactions: true, cennikView: true, reports: true, controls: true, pickups: true },
-    pracownik: { ...BASE_PERMS, transactions: true, cennikView: true, magazyn: true, pickups: true },
+    operator: { ...BASE_PERMS, intake: true, transactions: true, cennikView: true, magazyn: true, reports: true, controls: true, pickups: true, requests: true },
+    pracownik: { ...BASE_PERMS, intake: true, transactions: true, cennikView: true, magazyn: true, pickups: true },
     kierowca: { ...BASE_PERMS, pickups: true },
     controller: { ...BASE_PERMS, transactions: true, cennikView: true, reports: true, controls: true },
     marketing: { ...BASE_PERMS, cennikView: true, marketing: true },
@@ -375,6 +377,7 @@ const btnCopper = { width: "100%", padding: "17px", borderRadius: 17, border: "n
 const btnGhost = { width: "100%", padding: "16px", borderRadius: 17, border: "1.5px solid var(--line2)", cursor: "pointer", background: "var(--surface)", color: "var(--text)", fontWeight: 700, fontSize: 15.5, fontFamily: "var(--display)" };
 const sectionTitle = { fontFamily: "var(--display)", fontSize: 18, fontWeight: 800, color: "var(--text)", letterSpacing: "-.02em", margin: "30px 4px 12px" };
 function Sheet({ open, onClose, title, children }) {
+    useEffect(() => { if (!open) return; const k = (e) => { if (e.key === "Escape") onClose && onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [open, onClose]);
     if (!open)
         return null;
     return (React.createElement("div", { onClick: onClose, className: "sk-sheet-ov", style: { position: "fixed", inset: 0, zIndex: 80, background: "rgba(20,24,28,.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "fade .2s ease" } },
@@ -833,7 +836,7 @@ export default function App() {
                 activeTab === "zadania" && React.createElement(Zadania, { zadania, setZadania, users, currentUser, isOwner }),
                 activeTab === "req" && can("requests") && React.createElement(RequestsInbox, { requests, setRequests, mm })),
             (() => {
-                const canIn = isOwner || currentUser.role === "operator";
+                const canIn = isOwner || can("intake") || currentUser.role === "operator";
                 const btn = (key, on, Ic, lbl, onClick) => React.createElement("button", { key, onClick, style: { position: "relative", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, minHeight: 58, padding: 0, color: on ? "var(--copper)" : "var(--muted)" } },
                     React.createElement("span", { style: { display: "grid", placeItems: "center", width: 50, height: 30, borderRadius: 99, background: on ? "var(--copperSoft)" : "transparent", transition: "background .25s ease" } },
                         React.createElement(Ic, { size: 21, strokeWidth: on ? 2.5 : 2 })),
@@ -883,6 +886,7 @@ const CAT_COLORS = {
     ksieg: "#818cf8", ai: "#facc15", req: "#34d399", nadzorca: "#f87171", social: "#60a5fa", konkur: "#2dd4bf",
 };
 function KategoriePanel({ nav, activeTab, onPick, onClose, isOwner, theme, setTheme, big, setBig }) {
+    useEffect(() => { const k = (e) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
     return (React.createElement("div", { onClick: onClose, style: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(8,11,15,.62)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "fade .22s ease" } },
         React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { width: "100%", maxWidth: 480, background: "var(--surface)", borderRadius: "28px 28px 0 0", border: "1px solid var(--line)", borderBottom: "none", padding: "10px 18px calc(26px + env(safe-area-inset-bottom))", boxShadow: "0 -22px 64px -22px rgba(0,0,0,.65)", animation: "sheetUp .44s cubic-bezier(.22,1,.36,1)" } },
             React.createElement("div", { style: { width: 42, height: 5, borderRadius: 99, background: "var(--line2)", margin: "0 auto 16px" } }),
@@ -1280,11 +1284,12 @@ function TxRow({ x, onClick }) {
 function Transakcje({ tx, setViewDoc }) {
     const [f, setF] = useState("all");
     const [q, setQ] = useState("");
-    const list = tx.filter((x) => (f === "all" || x.kind === f) && (!q.trim() || fnorm(supplierName(x)).includes(fnorm(q)) || fnorm(x.no).includes(fnorm(q))));
+    const list = tx.filter((x) => (f === "all" || x.kind === f) && (!q.trim() || fnorm(supplierName(x)).includes(fnorm(q)) || fnorm(x.no).includes(fnorm(q)) || fnorm(x.plate || "").includes(fnorm(q))));
+    const [lim, setLim] = useState(40);
     const sum = list.reduce((a, x) => a + txTotal(x), 0);
     return (React.createElement("div", { style: { padding: "0 16px" } },
         React.createElement("header", { style: { paddingTop: 24 } },
-            React.createElement("h1", { style: { margin: 0, fontFamily: "var(--display)", fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" } }, "Transakcje"),
+            React.createElement("h1", { style: { margin: 0, fontFamily: "var(--display)", fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" } }, "Przyj\u0119cia"),
             React.createElement("div", { style: { color: "var(--muted)", fontSize: 14.5, marginTop: 2 } },
                 list.length,
                 " dokument\u00F3w \u00B7 ",
@@ -1297,7 +1302,17 @@ function Transakcje({ tx, setViewDoc }) {
         React.createElement("div", { style: { marginTop: 14 } }, list.length === 0 ? React.createElement(Card, { style: { textAlign: "center", padding: 30, color: "var(--muted)" } },
             React.createElement(Receipt, { size: 26, color: "var(--faint)", style: { marginBottom: 8 } }),
             React.createElement("div", { style: { fontSize: 14 } }, "Brak transakcji")) :
-            list.map((x) => React.createElement(TxRow, { key: x.id, x: x, onClick: () => setViewDoc(x) })))));
+            React.createElement(React.Fragment, null,
+                list.slice(0, lim).map((x, i) => {
+                    const d = fmtDateKey(x.ts), prev = i > 0 ? fmtDateKey(list[i - 1].ts) : null;
+                    const dayTot = d !== prev ? list.filter((y) => fmtDateKey(y.ts) === d).reduce((a, y) => a + txTotal(y), 0) : 0;
+                    return React.createElement(React.Fragment, { key: x.id },
+                        d !== prev && React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "18px 4px 8px", fontWeight: 800, fontSize: 15 } },
+                            React.createElement("span", null, new Date(x.ts).toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" })),
+                            React.createElement("span", { style: { color: "var(--muted)", fontSize: 14 } }, plnShort(dayTot))),
+                        React.createElement(TxRow, { x: x, onClick: () => setViewDoc(x) }));
+                }),
+                list.length > lim && React.createElement("button", { onClick: () => setLim(lim + 60), style: { ...btnGhost, marginTop: 12 } }, `Poka\u017C kolejne (zosta\u0142o ${list.length - lim})`)))));
 }
 /* ─────────── Cennik ─────────── */
 /* ─────────── Inteligencja Cenowa (alarm marży + notowania) ─────────── */
@@ -3197,7 +3212,7 @@ function NadzorcaAI({ tx, materials }) {
         React.createElement("div", { style: { fontSize: 12.5, color: "var(--faint)", marginTop: 6 } }, a.meta)));
     return (React.createElement("div", { style: { padding: "0 16px 40px" } },
         React.createElement("header", { style: { paddingTop: 26 } },
-            React.createElement("h1", { style: { margin: 0, fontFamily: "var(--display)", fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" } }, "Nadzorca AI"),
+            React.createElement("h1", { style: { margin: 0, fontFamily: "var(--display)", fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" } }, "Podpowiedzi"),
             React.createElement("div", { style: { fontSize: 14.5, color: "var(--muted)", marginTop: 3 } }, "Pilnuje Twojego skupu \u2014 wy\u0142apuje nieprawid\u0142owo\u015Bci i ryzyka.")),
         React.createElement("div", { style: { display: "flex", gap: 10, marginTop: 18 } },
             React.createElement(Card, { pad: 14, style: { flex: 1, textAlign: "center" } },
@@ -3304,8 +3319,9 @@ function SocialAuto({ materials, company }) {
                 " Kopiuj post")))),
         React.createElement("div", { style: { fontSize: 13, color: "var(--faint)", marginTop: 12, lineHeight: 1.5, textAlign: "center" } }, "Na razie post generujesz i kopiujesz r\u0119cznie. Pe\u0142na automatyczna publikacja \u2014 patrz plan A-Z.")));
 }
-const DOR_INK = "#0d1014", DOR_PANEL = "#15191f", DOR_PANEL2 = "#1b212b", DOR_HAIR = "#222932", DOR_HAIR2 = "#2b343f";
-const DOR_STEEL = "#8c98a6", DOR_STEELD = "#586472", DOR_PAPER = "#eef2f6", DOR_BRASS = "#c9a35b";
+// Doradca AI korzysta z motywu aplikacji (jasny/ciemny), a nie z własnej ciemnej palety
+const DOR_INK = "var(--bg)", DOR_PANEL = "var(--surface)", DOR_PANEL2 = "var(--surface2)", DOR_HAIR = "var(--line)", DOR_HAIR2 = "var(--line2)";
+const DOR_STEEL = "var(--muted)", DOR_STEELD = "var(--faint)", DOR_PAPER = "var(--text)", DOR_BRASS = "#b5741f";
 /* ─────────── Doradca: Analiza biznesu (z realnych danych, bez API) ─────────── */
 function DorAnaliza({ tx, materials, akcent }) {
     const txx = tx || [];
@@ -3349,7 +3365,7 @@ function DorAnaliza({ tx, materials, akcent }) {
     const maxSup = topSup[0] ? topSup[0][1] : 1;
     return (React.createElement("div", { className: "dorMin", style: { paddingBottom: 6 } },
         React.createElement("div", { style: card },
-            React.createElement("div", { style: { ...lab, marginBottom: 12 } }, "Obr\u00F3t skupu"),
+            React.createElement("div", { style: { ...lab, marginBottom: 12 } }, "Wydatki na skup"),
             React.createElement("div", { style: { display: "flex", gap: 12 } },
                 React.createElement("div", { style: { flex: 1 } },
                     React.createElement("div", { style: { fontSize: 13, color: DOR_STEEL } }, "Bie\u017C\u0105cy miesi\u0105c"),
@@ -3518,7 +3534,7 @@ function DorRich({ text, akcent, plain }) {
         ? React.createElement("b", { key: k + "-" + i, style: { fontWeight: 700, color: "#fff" } }, p.slice(2, -2)) : React.createElement("span", { key: k + "-" + i }, p));
     return React.createElement("div", null, bloki.map((b, i) => {
         if (b.t === "h")
-            return React.createElement("div", { key: i, style: { fontFamily: "'Fraunces',Georgia,serif", fontWeight: 600, fontSize: 15, color: akcent, margin: i === 0 ? "0 0 7px" : "13px 0 7px" } }, b.txt);
+            return React.createElement("div", { key: i, style: { fontFamily: "var(--display)", fontWeight: 800, fontSize: 15.5, color: akcent, margin: i === 0 ? "0 0 7px" : "13px 0 7px" } }, b.txt);
         if (b.t === "p")
             return React.createElement("div", { key: i, style: { margin: "0 0 7px" } }, inline(b.txt, i));
         if (b.t === "oli")
@@ -3561,7 +3577,7 @@ function DoradcaBiznesowy({ materials, company, tx }) {
         }
         catch (e) { } };
     }, []);
-    const DISP = "'Fraunces', Georgia, serif";
+    const DISP = "var(--display)";
     const scrollDown = () => setTimeout(() => { if (scrollRef.current)
         scrollRef.current.scrollTo({ top: 9e6, behavior: "smooth" }); }, 40);
     const typeOut = (full, done) => {
@@ -3633,7 +3649,7 @@ function DoradcaBiznesowy({ materials, company, tx }) {
                     React.createElement("span", { style: { fontSize: 15 } }, s.glyf),
                     React.createElement("span", { style: { fontSize: 14, fontWeight: 700, whiteSpace: "nowrap" } }, s.rola));
             }))),
-        React.createElement("div", { ref: scrollRef, style: { height: 440, overflowY: "auto", padding: "18px 14px 8px", display: "flex", flexDirection: "column", gap: 15 } }, aktywny === "analiza" ? React.createElement(DorAnaliza, { tx: tx, materials: materials, akcent: akcent }) : (React.createElement(React.Fragment, null,
+        React.createElement("div", { ref: scrollRef, style: { height: aktywny === "analiza" ? "auto" : "calc(100dvh - 330px)", minHeight: 360, overflowY: aktywny === "analiza" ? "visible" : "auto", padding: "18px 14px 8px", display: "flex", flexDirection: "column", gap: 15 } }, aktywny === "analiza" ? React.createElement(DorAnaliza, { tx: tx, materials: materials, akcent: akcent }) : (React.createElement(React.Fragment, null,
             msgs.length === 0 && !busy && !stream && (React.createElement("div", { className: "dorMin", key: aktywny },
                 React.createElement("div", { style: { padding: "4px 2px 18px", borderBottom: `1px solid ${DOR_HAIR}`, marginBottom: 16 } },
                     React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 12 } },
