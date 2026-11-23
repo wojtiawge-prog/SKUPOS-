@@ -9,6 +9,7 @@ każda zmiana = build (`npm run build`) + testy + commit + sprawozdanie.
 - [x] P0 w aplikacji — fałszywa waga, przełącznik ról, AI z tokenem, kolejka zapisu, własny build, eksport Excel, kopia, dziennik
 - [x] P0 baza (gotowe, przetestowane, NIEwdrożone) — `supabase/migrations/0001_skupos_core.sql`, `supabase/functions/agent-ai`
 - [x] 111 — analiza 4 ról + poprawki, testy e2e (17) + GitHub Actions, warstwa danych pod tabele (`datalayer.js`, migracja 0002, przełącznik `SKUPOS_DB`), wydruk FPO wg wzoru (A4 ×2, 80 mm), wygląd (tryb ciemny, puste stany, przyciski 44 px), konkurencja v2, szkice prawne w `legal/` (do prawnika)
+- [~] 222 — baza SKUPOS-prod wdrożona (0001–0003, agent-ai), test ról na prawdziwej bazie OK, aplikacja przepięta (tryb `?tryb=chmura`), zaproszenia pracowników kodem. Zostało: pierwsze konto właściciela (test na żywo), własny SMTP (Resend), Sentry, kopie zapasowe/PITR, środowisko testowe, „wdrażamy” = chmura domyślnie
 - [ ] Ruch właściciela: nowy projekt Supabase (Frankfurt) → „baza gotowa”; klucz AI w Secrets; Cloudflare Pages; repo prywatne
 
 ## Komendy

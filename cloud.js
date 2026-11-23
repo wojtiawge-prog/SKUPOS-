@@ -696,7 +696,7 @@ function SetupScreen({ user, clientMode, clientFirmaId, onDone }) {
             let prof;
             if (clientMode) {
                 const s = getSupa();
-                const { error } = await s.from("profile").insert({ id: user.id, firma_id: clientFirmaId, imie: imie.trim(), rola: "client", login: user.email });
+                const { error } = await s.rpc("dolacz_jako_klient", { p_firma: clientFirmaId, p_imie: imie.trim(), p_login: user.email });
                 if (error) throw error;
                 prof = { id: user.id, firma_id: clientFirmaId, imie: imie.trim(), rola: "client", login: user.email };
                 await przygotujKlienta(prof);
