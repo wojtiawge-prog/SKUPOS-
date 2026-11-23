@@ -43,8 +43,10 @@
   import React from "react";
   import { createRoot } from "react-dom/client";
   import CloudGate from "./cloud.js";
+  import App from "./app.js";
   const root = createRoot(document.getElementById("root"));
-  root.render(React.createElement(CloudGate));
+  // TRYB PODGLĄDU (config.js: APP_MODE = "local"): bez logowania, dane tylko w tej przeglądarce
+  root.render(React.createElement(window.APP_MODE === "local" ? App : CloudGate));
 </script>
 <script>
   if ("serviceWorker" in navigator) {
