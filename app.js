@@ -563,6 +563,27 @@ export default function App() {
         save("sk_tasks_v2", zadania); }, [zadania, ready]);
     useEffect(() => { if (ready)
         save("sk_session_v2", session); }, [session, ready]);
+    // ── P0: Dziennik zmian (kto, co, kiedy) — przyjęcia, usunięcia, ceny, konta, wydania ──
+    const auditPrev = useRef(null);
+    useEffect(() => {
+        if (!ready) return;
+        const prev = auditPrev.current;
+        auditPrev.current = { tx, materials, users, dispatch };
+        if (!prev) return;
+        const who = (users.find((u) => u.id === session) || {}).name || "\u2014";
+        const ev = [];
+        const ids = (a) => new Set((a || []).map((x) => x.id));
+        const matN = (id) => ((materials || []).find((m) => m.id === id) || {}).n || id;
+        if (prev.tx !== tx) { const pi = ids(prev.tx), ni = ids(tx); tx.forEach((t) => { if (!pi.has(t.id)) ev.push(["Przyj\u0119cie", `${t.no || ""} · ${pln(txTotal(t))} · ${kg(txMass(t))}`]); }); (prev.tx || []).forEach((t) => { if (!ni.has(t.id)) ev.push(["USUNI\u0118TO przyj\u0119cie", `${t.no || ""} · ${pln(txTotal(t))}`]); }); }
+        if (prev.materials !== materials) { const pm = {}; (prev.materials || []).forEach((m) => { pm[m.id] = m; }); materials.forEach((m) => { const o = pm[m.id]; if (!o) ev.push(["Nowy towar w cenniku", m.n]); else if (o.buy !== m.buy || o.sell !== m.sell) ev.push(["Zmiana ceny", `${m.n}: skup ${o.buy} \u2192 ${m.buy} zł/kg, sprzedaż ${o.sell} \u2192 ${m.sell} zł/kg`]); }); const ni = ids(materials); (prev.materials || []).forEach((m) => { if (!ni.has(m.id)) ev.push(["USUNI\u0118TO towar", m.n]); }); }
+        if (prev.users !== users) { const pu = {}; (prev.users || []).forEach((u) => { pu[u.id] = u; }); users.forEach((u) => { const o = pu[u.id]; if (!o) ev.push(["Nowe konto", `${u.name} (${ROLE_LABEL[u.role] || u.role})`]); else if (o.role !== u.role) ev.push(["Zmiana roli", `${u.name}: ${ROLE_LABEL[o.role] || o.role} \u2192 ${ROLE_LABEL[u.role] || u.role}`]); }); const ni = ids(users); (prev.users || []).forEach((u) => { if (!ni.has(u.id)) ev.push(["USUNI\u0118TO konto", u.name]); }); }
+        if (prev.dispatch !== dispatch) { const pi = ids(prev.dispatch), ni = ids(dispatch); dispatch.forEach((d) => { if (!pi.has(d.id)) ev.push(["Wydanie z magazynu", `${matN(d.matId)}: ${kg(d.w)} \u2192 ${d.contractor || ""}`]); }); (prev.dispatch || []).forEach((d) => { if (!ni.has(d.id)) ev.push(["USUNI\u0118TO wydanie", `${matN(d.matId)}: ${kg(d.w)}`]); }); }
+        if (!ev.length || ev.length > 300) return; // masowe operacje (dane pokazowe, import kopii) nie zaśmiecają dziennika
+        let log = [];
+        try { log = JSON.parse(localStorage.getItem("sk_audit_v1") || "[]"); } catch (e) { }
+        const now = Date.now();
+        save("sk_audit_v1", [...ev.map(([a, d]) => ({ ts: now, who, a, d })), ...log].slice(0, 3000));
+    }, [tx, materials, users, dispatch, ready]);
     // TRYB LOKALNY (bez konta): przy pierwszym uruchomieniu wejdz automatycznie jako wlasciciel.
     // Po recznym wylogowaniu pokazuje juz normalny wybor uzytkownika (flaga sk_local_boot).
     useEffect(() => {
@@ -769,6 +790,7 @@ export default function App() {
         ...(can("accounting") ? [{ id: "ksieg", label: "Papiery i podatki", icon: Calculator }] : []),
         { id: "zadania", label: "Zadania", icon: BadgeCheck },
         ...(can("requests") ? [{ id: "req", label: "Zg\u0142oszenia", icon: Inbox }] : []),
+        ...(isOwner ? [{ id: "kopia", label: "Eksport, kopia, dziennik", icon: ShieldCheck }] : []),
         ...((can("marketing") || can("accounting")) ? [{ id: "nadzorca", label: "Podpowiedzi", icon: AlertTriangle }] : []),
         ...((can("marketing") || can("accounting")) ? [{ id: "ai", label: "Doradca AI", icon: Sparkles }] : []),
         ...(can("pickups") ? [{ id: "wyw", label: "Wywozy", icon: Truck }] : []),
@@ -807,6 +829,7 @@ export default function App() {
                 activeTab === "nadzorca" && (can("marketing") || can("accounting")) && React.createElement(NadzorcaAI, { tx: tx, materials: materials }),
                 activeTab === "social" && can("marketing") && React.createElement(SocialAuto, { materials: materials, company: company }),
                 activeTab === "konkur" && can("cennikView") && React.createElement(KonkurencjaView, { materials: materials }),
+                activeTab === "kopia" && isOwner && React.createElement(KopiaDziennik, { tx, materials, stock, dispatch }),
                 activeTab === "zadania" && React.createElement(Zadania, { zadania, setZadania, users, currentUser, isOwner }),
                 activeTab === "req" && can("requests") && React.createElement(RequestsInbox, { requests, setRequests, mm })),
             (() => {
@@ -856,7 +879,7 @@ export default function App() {
 /* ─────────── Panel kategorii (szybki, artystyczny przełącznik sekcji) ─────────── */
 const CAT_COLORS = {
     home: "#d08249", tx: "#22c55e", cennik: "#e0a13f", intel: "#a78bfa",
-    mag: "#38bdf8", wyw: "#2dd4bf", zadania: "#f472b6", mkt: "#fb923c",
+    kopia: "#0ea5e9", mag: "#38bdf8", wyw: "#2dd4bf", zadania: "#f472b6", mkt: "#fb923c",
     ksieg: "#818cf8", ai: "#facc15", req: "#34d399", nadzorca: "#f87171", social: "#60a5fa", konkur: "#2dd4bf",
 };
 function KategoriePanel({ nav, activeTab, onPick, onClose, isOwner, theme, setTheme, big, setBig }) {
@@ -883,6 +906,86 @@ function KategoriePanel({ nav, activeTab, onPick, onClose, isOwner, theme, setTh
                 React.createElement("div", { style: { fontSize: 13.5, fontWeight: 700, color: "var(--muted)", letterSpacing: ".06em", textTransform: "uppercase" } }, "Wygl\u0105d"),
                 React.createElement("div", { style: { display: "flex", gap: 8 } }, [["light", "Jasny (plac, s\u0142o\u0144ce)"], ["dark", "Ciemny"]].map(([k, l]) => React.createElement("button", { key: k, onClick: () => setTheme(k), style: { flex: 1, minHeight: 48, borderRadius: 12, cursor: "pointer", fontSize: 14, fontWeight: 700, border: theme === k ? "2px solid var(--copper)" : "1px solid var(--line2)", background: theme === k ? "rgba(200,116,63,.12)" : "var(--surface2)", color: theme === k ? "var(--copper)" : "var(--text)" } }, l))),
                 React.createElement("button", { onClick: () => setBig(!big), style: { minHeight: 48, borderRadius: 12, cursor: "pointer", fontSize: 14, fontWeight: 700, border: big ? "2px solid var(--copper)" : "1px solid var(--line2)", background: big ? "rgba(200,116,63,.12)" : "var(--surface2)", color: big ? "var(--copper)" : "var(--text)" } }, big ? "Du\u017Cy tekst: w\u0142\u0105czony" : "Du\u017Cy tekst: wy\u0142\u0105czony"))))));
+}
+/* ─────────── P0: Eksport do Excela, kopia zapasowa, dziennik zmian ─────────── */
+const csvDownload = (name, header, rows) => {
+    const esc = (v) => { const x = v == null ? "" : String(v); return /[;"\n\r]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+    const txt = "\uFEFF" + [header, ...rows].map((r) => r.map(esc).join(";")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([txt], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+};
+const numPL = (n, d = 2) => (Math.round((+n || 0) * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d).replace(".", ",");
+const BACKUP_SKIP = ["sk_session_v2", "sk_cloud_prof", "sk_pending_setup", "sk_local_boot"];
+function KopiaDziennik({ tx, materials, stock, dispatch }) {
+    const [msg, setMsg] = useState("");
+    const [filter, setFilter] = useState("");
+    const [restore, setRestore] = useState(null);
+    const today = new Date().toISOString().slice(0, 10);
+    const log = (() => { try { return JSON.parse(localStorage.getItem("sk_audit_v1") || "[]"); } catch (e) { return []; } })();
+    const shown = log.filter((e) => !filter || (e.a + " " + e.d + " " + e.who).toLowerCase().includes(filter.toLowerCase())).slice(0, 300);
+    const matN = (id) => ((materials || []).find((m) => m.id === id) || {}).n || id;
+    const expTx = () => { const rows = []; (tx || []).slice().sort((a, b) => a.ts - b.ts).forEach((t) => (t.pos || []).forEach((p) => rows.push([t.no, new Date(t.ts).toLocaleString("pl-PL"), t.kind, t.osoba ? `${t.osoba.imie || ""} ${t.osoba.nazwisko || ""}`.trim() : (t.firma ? t.firma.nazwa : ""), t.firma ? t.firma.nip : "", t.plate || "", p.n, numPL(p.w, 1), numPL(p.price), numPL(p.w * p.price), t.payment || ""]))); csvDownload(`SkupOS_przyjecia_${today}.csv`, ["Nr dokumentu", "Data", "Rodzaj", "Klient", "NIP", "Rejestracja", "Towar", "Masa kg", "Cena zł/kg", "Wartość zł", "Płatność"], rows); setMsg(`Pobrano ${rows.length} pozycji przyjęć.`); };
+    const expKlienci = () => { const by = {}; (tx || []).forEach((t) => { const k = t.firma ? "F:" + (t.firma.nip || t.firma.nazwa) : "O:" + ((t.osoba && t.osoba.dowod) || (t.osoba && t.osoba.nazwisko) || t.plate); const r = by[k] || (by[k] = { n: t.firma ? t.firma.nazwa : `${(t.osoba || {}).imie || ""} ${(t.osoba || {}).nazwisko || ""}`.trim(), typ: t.firma ? "Firma" : "Osoba", nip: t.firma ? t.firma.nip : "", plate: t.plate || "", wiz: 0, kg: 0, zl: 0, last: 0 }); r.wiz++; r.kg += txMass(t); r.zl += txTotal(t); r.last = Math.max(r.last, t.ts); }); const rows = Object.values(by).sort((a, b) => b.zl - a.zl).map((r) => [r.n, r.typ, r.nip, r.plate, r.wiz, numPL(r.kg, 1), numPL(r.zl), new Date(r.last).toLocaleDateString("pl-PL")]); csvDownload(`SkupOS_klienci_${today}.csv`, ["Klient", "Typ", "NIP", "Ostatnia rejestracja", "Wizyty", "Masa kg", "Wartość zł", "Ostatnia wizyta"], rows); setMsg(`Pobrano ${rows.length} klientów.`); };
+    const expMag = () => { const rows = (materials || []).map((m) => [m.n, m.g, numPL(stock[m.id] || 0, 1), numPL(m.buy), numPL(m.sell), numPL((stock[m.id] || 0) * m.buy), numPL((stock[m.id] || 0) * (m.sell || 0))]); csvDownload(`SkupOS_magazyn_${today}.csv`, ["Towar", "Grupa", "Stan kg", "Cena skupu", "Cena sprzedaży", "Wartość (skup)", "Wartość (sprzedaż)"], rows); setMsg(`Pobrano stan ${rows.length} towarów.`); };
+    const expWyd = () => { const rows = (dispatch || []).slice().sort((a, b) => a.ts - b.ts).map((d) => [d.dateKey, matN(d.matId), numPL(d.w, 1), d.contractor || ""]); csvDownload(`SkupOS_wydania_${today}.csv`, ["Data", "Towar", "Masa kg", "Odbiorca"], rows); setMsg(`Pobrano ${rows.length} wydań.`); };
+    const expLog = () => { csvDownload(`SkupOS_dziennik_zmian_${today}.csv`, ["Data i godzina", "Kto", "Zdarzenie", "Szczegóły"], log.map((e) => [new Date(e.ts).toLocaleString("pl-PL"), e.who, e.a, e.d])); setMsg(`Pobrano ${log.length} wpisów dziennika.`); };
+    const backup = () => {
+        const data = {};
+        for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf("sk_") === 0 && BACKUP_SKIP.indexOf(k) === -1) data[k] = localStorage.getItem(k); }
+        const blob = new Blob([JSON.stringify({ app: "SkupOS", v: 1, created: new Date().toISOString(), data }, null, 1)], { type: "application/json" });
+        const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `SkupOS_kopia_${today}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+        try { localStorage.setItem("sk_last_backup", String(Date.now())); } catch (e) { }
+        setMsg(`Kopia zapisana: ${Object.keys(data).length} zbiorów danych. Trzymaj plik w bezpiecznym miejscu (dysk, e-mail do siebie).`);
+    };
+    const pickFile = (e) => {
+        const f = e.target.files && e.target.files[0]; if (!f) return;
+        const r = new FileReader();
+        r.onload = () => { try { const j = JSON.parse(r.result); if (j.app !== "SkupOS" || !j.data) throw new Error("x"); setRestore(j); } catch (err) { setMsg("To nie jest plik kopii SkupOS."); } };
+        r.readAsText(f); e.target.value = "";
+    };
+    const doRestore = () => {
+        const st = (typeof window !== "undefined" && window.storage) || null;
+        Object.entries(restore.data).forEach(([k, v]) => { if (BACKUP_SKIP.indexOf(k) !== -1) return; try { if (st && st.set) st.set(k, v); else localStorage.setItem(k, v); } catch (e) { } });
+        setRestore(null); setMsg("Przywrócono kopię. Odświeżam aplikację\u2026"); setTimeout(() => { try { location.reload(); } catch (e) { } }, 900);
+    };
+    const lastB = (() => { try { return +localStorage.getItem("sk_last_backup") || 0; } catch (e) { return 0; } })();
+    const days = lastB ? Math.floor((Date.now() - lastB) / 86400000) : null;
+    const row = (Ic, title, sub, onClick) => React.createElement("button", { onClick, style: { width: "100%", display: "flex", alignItems: "center", gap: 13, padding: "14px 4px", background: "none", border: "none", borderTop: "1px solid var(--line)", cursor: "pointer", color: "var(--text)", textAlign: "left" } },
+        React.createElement("span", { style: { width: 42, height: 42, borderRadius: 13, background: "var(--copperSoft)", display: "grid", placeItems: "center", flexShrink: 0 } }, React.createElement(Ic, { size: 20, color: "var(--copper)" })),
+        React.createElement("span", { style: { flex: 1 } }, React.createElement("div", { style: { fontWeight: 700, fontSize: 16 } }, title), React.createElement("div", { style: { fontSize: 13.5, color: "var(--muted)", marginTop: 2 } }, sub)),
+        React.createElement(ChevronRight, { size: 19, color: "var(--faint)" }));
+    return (React.createElement("div", { style: { padding: "0 16px" } },
+        React.createElement("header", { style: { paddingTop: 24 } },
+            React.createElement("h1", { style: { margin: 0, fontFamily: "var(--display)", fontSize: 26, fontWeight: 800 } }, "Eksport, kopia, dziennik"),
+            React.createElement("div", { style: { color: "var(--muted)", fontSize: 15, marginTop: 2 } }, "Twoje dane zawsze w Twoich r\u0119kach")),
+        msg && React.createElement("div", { style: { marginTop: 14, padding: "12px 14px", borderRadius: 14, background: "rgba(34,197,94,.12)", color: "var(--text)", fontSize: 14.5, fontWeight: 600 } }, msg),
+        React.createElement("div", { style: sectionTitle }, "Eksport do Excela"),
+        React.createElement(Card, { pad: 12 },
+            React.createElement("div", { style: { fontSize: 13.5, color: "var(--muted)", padding: "2px 4px 10px" } }, "Pliki CSV otwieraj\u0105 si\u0119 w Excelu z polskimi znakami i przecinkami. Dla ksi\u0119gowej, kontroli i do przeniesienia danych."),
+            row(Receipt, "Przyj\u0119cia (ka\u017Cda pozycja)", `${(tx || []).length} dokumentów`, expTx),
+            row(Users, "Klienci i ich obroty", "Wizyty, masa, warto\u015B\u0107, ostatnia wizyta", expKlienci),
+            row(Warehouse, "Stan magazynu", "Ilo\u015B\u0107 i warto\u015B\u0107 ka\u017Cdego towaru", expMag),
+            row(Truck, "Wydania do huty", `${(dispatch || []).length} wyda\u0144`, expWyd)),
+        React.createElement("div", { style: sectionTitle }, "Kopia zapasowa"),
+        React.createElement(Card, null,
+            React.createElement("div", { style: { fontSize: 14.5, color: days == null || days > 7 ? "var(--red)" : "var(--muted)", fontWeight: 600, marginBottom: 12 } }, days == null ? "Nie masz jeszcze \u017Cadnej kopii. Zr\u00F3b j\u0105 teraz." : days === 0 ? "Ostatnia kopia: dzi\u015B." : `Ostatnia kopia: ${days} dni temu.`),
+            React.createElement("button", { onClick: backup, style: btnCopper }, React.createElement(Download, { size: 18 }), " Pobierz pe\u0142n\u0105 kopi\u0119"),
+            React.createElement("label", { style: { ...btnGhost, marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxSizing: "border-box" } }, React.createElement(RefreshCw, { size: 17 }), " Przywr\u00F3\u0107 z pliku kopii", React.createElement("input", { type: "file", accept: "application/json,.json", onChange: pickFile, style: { display: "none" } })),
+            restore && React.createElement("div", { style: { marginTop: 12, padding: 14, borderRadius: 14, border: "1.5px solid var(--red)", background: "rgba(220,38,38,.07)" } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 15 } }, "Przywr\u00F3ci\u0107 kopi\u0119 z ", new Date(restore.created).toLocaleString("pl-PL"), "?"),
+                React.createElement("div", { style: { fontSize: 14, color: "var(--muted)", margin: "6px 0 12px" } }, "Obecne dane zostan\u0105 zast\u0105pione danymi z kopii. Tej operacji nie da si\u0119 cofn\u0105\u0107 \u2014 najpierw pobierz aktualn\u0105 kopi\u0119."),
+                React.createElement("div", { style: { display: "flex", gap: 8 } },
+                    React.createElement("button", { onClick: () => setRestore(null), style: { ...btnGhost, flex: 1 } }, "Anuluj"),
+                    React.createElement("button", { onClick: doRestore, style: { ...btnCopper, flex: 1, background: "var(--red)", boxShadow: "none" } }, "Przywr\u00F3\u0107")))),
+        React.createElement("div", { style: { ...sectionTitle, display: "flex", justifyContent: "space-between", alignItems: "center" } }, "Dziennik zmian", log.length > 0 && React.createElement("button", { onClick: expLog, style: { background: "none", border: "none", color: "var(--copper)", fontWeight: 800, fontSize: 14.5, cursor: "pointer" } }, "Pobierz CSV")),
+        React.createElement("input", { value: filter, onChange: (e) => setFilter(e.target.value), placeholder: "Szukaj: osoba, towar, \u201Eusuni\u0119to\u201D\u2026", style: { ...inputStyle, marginBottom: 10 } }),
+        React.createElement(Card, { pad: 6 }, shown.length === 0 ? React.createElement("div", { style: { padding: 14, color: "var(--muted)", fontSize: 14.5 } }, log.length ? "Brak wpis\u00F3w dla tego wyszukiwania." : "Tu zobaczysz ka\u017Cde przyj\u0119cie, usuni\u0119cie, zmian\u0119 ceny i konta \u2014 kto i kiedy.") : shown.map((e, i) => React.createElement("div", { key: i, style: { padding: "11px 10px", borderTop: i ? "1px solid var(--line)" : "none" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 8 } },
+                React.createElement("span", { style: { fontWeight: 800, fontSize: 14.5, color: /USUNI/.test(e.a) ? "var(--red)" : "var(--text)" } }, e.a),
+                React.createElement("span", { style: { fontSize: 13, color: "var(--faint)", whiteSpace: "nowrap" } }, new Date(e.ts).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))),
+            React.createElement("div", { style: { fontSize: 14, color: "var(--muted)", marginTop: 2 } }, e.d),
+            React.createElement("div", { style: { fontSize: 13, color: "var(--faint)", marginTop: 2 } }, "\u{1F464} ", e.who))))));
 }
 /* ─────────── Pasek segmentów (scalone sekcje) ─────────── */
 function SegBar({ items, active, onPick }) {
