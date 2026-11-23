@@ -650,6 +650,7 @@ export default function CloudGate() {
             setStan("app");
         })();
     }, []);
+    if (window.APP_MODE === "local") return h(App); // tryb podglądu bez logowania
     if (stan === "loading") return h(Info, { tytul: "\u0141adowanie\u2026", opis: "\u0141\u0105cz\u0119 z baz\u0105 i sprawdzam logowanie." });
     if (stan === "config") return h(Info, { tytul: "Skonfiguruj baz\u0119", opis: "Otw\u00F3rz plik config.js i wpisz Project URL oraz anon key ze swojego projektu Supabase (Project Settings \u2192 API)." });
     if (stan === "confirm") return h(ConfirmScreen, { email: confirmEmail, onBack: authHome });
