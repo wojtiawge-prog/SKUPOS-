@@ -8,6 +8,7 @@ każda zmiana = build (`npm run build`) + testy + commit + sprawozdanie.
 - [x] 123 — ocena interfejsu, czyszczenie (14 → 4 zakładki + Przyjęcie), jasny motyw, nowy wygląd
 - [x] P0 w aplikacji — fałszywa waga, przełącznik ról, AI z tokenem, kolejka zapisu, własny build, eksport Excel, kopia, dziennik
 - [x] P0 baza (gotowe, przetestowane, NIEwdrożone) — `supabase/migrations/0001_skupos_core.sql`, `supabase/functions/agent-ai`
+- [x] 111 — analiza 4 ról + poprawki, testy e2e (17) + GitHub Actions, warstwa danych pod tabele (`datalayer.js`, migracja 0002, przełącznik `SKUPOS_DB`), wydruk FPO wg wzoru (A4 ×2, 80 mm), wygląd (tryb ciemny, puste stany, przyciski 44 px), konkurencja v2, szkice prawne w `legal/` (do prawnika)
 - [ ] Ruch właściciela: nowy projekt Supabase (Frankfurt) → „baza gotowa”; klucz AI w Secrets; Cloudflare Pages; repo prywatne
 
 ## Komendy
@@ -27,5 +28,7 @@ każda zmiana = build (`npm run build`) + testy + commit + sprawozdanie.
 | stop | zakończ krok, zapisz stan, czekaj |
 
 ## Znane problemy (kolejka)
-- Ekrany AI / wydruk / portal klienta: pojedyncze stare kolory po zmianie wyglądu
+- Portal klienta: pojedyncze stare kolory po zmianie wyglądu (ekrany AI i wydruk — naprawione w 111)
+- Model AI wpisany na sztywno w aplikacji (`claude-sonnet-4-6`) — po wdrożeniu `agent-ai` model wybiera serwer
+- Teksty 11 px zostały tylko w wydrukach i etykietach dokumentów (celowo)
 - Telemarketing w PL wymaga zgody (art. 398 PKE) — sprzedaż: wizyty, polecenia, inbound, telefony badawcze
