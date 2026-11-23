@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-<title>SkupOS Klient — ceny i kwity</title>
-<meta name="description" content="Portal klienta skupu: aktualne ceny, wyceny i Twoje kwity." />
+<title>SkupOS — System skupu</title>
+<meta name="description" content="System do prowadzenia skupu złomu: przyjęcia, cennik, magazyn, wywozy." />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#c8743f" />
-<link rel="icon" type="image/png" sizes="192x192" href="../icon-192.png" />
-<link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="SkupOS Klient" />
+<meta name="apple-mobile-web-app-title" content="SkupOS" />
 <style>
   html, body { margin: 0; padding: 0; background: #111418; -webkit-tap-highlight-color: transparent; }
   * { -webkit-text-size-adjust: 100%; }
@@ -42,14 +42,14 @@
 <script type="module">
   import React from "react";
   import { createRoot } from "react-dom/client";
-  import CloudGate from "../cloud.js";
+  import CloudGate from "./cloud.js";
   const root = createRoot(document.getElementById("root"));
   root.render(React.createElement(CloudGate));
 </script>
 <script>
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("../sw.js", { scope: "../" }).catch(function (e) { console.warn("SW:", e); });
+      navigator.serviceWorker.register("sw.js").catch(function (e) { console.warn("SW:", e); });
     });
   }
 </script>
