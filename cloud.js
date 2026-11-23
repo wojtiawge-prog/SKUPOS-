@@ -175,7 +175,9 @@ async function pull(firmaId) {
     if (TRYB_TABEL()) {
         try {
             const d = await loadAll(s);
-            localStorage.setItem("sk_mat_v2", JSON.stringify(d.materials));
+            // nowa firma bez cennika: zostaw domyślny cennik aplikacji — zapisze się do bazy przy pierwszym zapisie
+            if (d.materials.length) localStorage.setItem("sk_mat_v2", JSON.stringify(d.materials));
+            else localStorage.removeItem("sk_mat_v2");
             localStorage.setItem("sk_tx_v2", JSON.stringify(d.tx));
             localStorage.setItem("sk_disp_v2", JSON.stringify(d.dispatch));
         }
