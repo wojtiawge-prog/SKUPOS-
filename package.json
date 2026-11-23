@@ -5,7 +5,7 @@
   "description": "SkupOS — system dla skupów złomu (aplikacja właściciela + portal klienta)",
   "scripts": {
     "build": "esbuild entry.js --bundle --format=iife --minify --target=es2019 --define:process.env.NODE_ENV=\\\"production\\\" --outfile=skupos.bundle.js",
-    "test": "node tests/e2e.mjs"
+    "test": "node tests/datalayer.test.mjs && node tests/e2e.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.45.0",
@@ -16,5 +16,6 @@
   "devDependencies": {
     "esbuild": "0.24.0",
     "playwright": "1.49.1"
-  }
+  },
+  "type": "module"
 }

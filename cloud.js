@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import App from "./app.js";
+import { loadAll, saveKey, TABLE_KEYS } from "./datalayer.js";
+const TRYB_TABEL = () => typeof window !== "undefined" && window.SKUPOS_DB === "tables";
+let _tq = Promise.resolve();
 /* ════════════════════════════════════════════════════════════════
    CloudGate — nakładka łącząca aplikację z bazą Supabase
    • logowanie / rejestracja firmy (Supabase Auth)
@@ -102,10 +105,10 @@ function scheduleRetry() {
         _retryT = null;
         const s = getSupa();
         if (!s) return;
-        Object.entries(_pending).forEach(([k, p]) => pushKey(s, p.firmaId, k, p.val));
+        Object.entries(_pending).forEach(([k, p]) => { if (k.indexOf("tbl:") !== 0) pushKey(s, p.firmaId, k, p.val); });
     }, 20000);
 }
-try { window.addEventListener("online", () => { const s = getSupa(); if (s) Object.entries(_pending).forEach(([k, p]) => pushKey(s, p.firmaId, k, p.val)); }); } catch (e) { }
+try { window.addEventListener("online", () => { const s = getSupa(); if (s) Object.entries(_pending).forEach(([k, p]) => { if (k.indexOf("tbl:") !== 0) pushKey(s, p.firmaId, k, p.val); }); }); } catch (e) { }
 try { window.addEventListener("beforeunload", (e) => { if (Object.keys(_pending).length) { e.preventDefault(); e.returnValue = ""; } }); } catch (e) { }
 // ── Storage: localStorage (czyta apka) + wypchnięcie do bazy ──
 function patchStorage(firmaId) {
@@ -117,11 +120,24 @@ function patchStorage(firmaId) {
             return { value: null };
         } },
         set: (k, v) => {
+            let prevRaw = null;
+            try { prevRaw = localStorage.getItem(k); } catch (e) { }
             try {
                 localStorage.setItem(k, v);
             }
             catch (e) { }
             if (k === "sk_req_v2") return; // zgłoszenia żyją w tabeli zgloszenia, nie w blobie
+            if (TRYB_TABEL() && TABLE_KEYS.indexOf(k) !== -1) {
+                // nowa baza: cennik, przyjęcia i wydania idą do tabel (tylko zmienione rekordy, po kolei)
+                const s2 = getSupa();
+                if (s2 && firmaId) {
+                    let nv = [], pv = [];
+                    try { nv = JSON.parse(v) || []; } catch (e) { }
+                    try { pv = JSON.parse(prevRaw || "[]") || []; } catch (e) { }
+                    _tq = _tq.then(() => saveKey(s2, firmaId, k, nv, pv)).then(() => { delete _pending["tbl:" + k]; syncBanner(); }, (err) => { console.error("SkupOS zapis do tabel:", err); _pending["tbl:" + k] = { firmaId, val: null }; syncBanner(); });
+                }
+                return;
+            }
             const s = getSupa();
             if (s && firmaId) {
                 let val;
@@ -147,12 +163,21 @@ async function pull(firmaId) {
         return;
     try {
         const { data } = await s.from("ustawienia").select("klucz,wartosc").eq("firma_id", firmaId);
-        (data || []).forEach((r) => { try {
+        (data || []).forEach((r) => { if (TRYB_TABEL() && TABLE_KEYS.indexOf(r.klucz) !== -1) return; try {
             localStorage.setItem(r.klucz, JSON.stringify(r.wartosc));
         }
         catch (e) { } });
     }
     catch (e) { }
+    if (TRYB_TABEL()) {
+        try {
+            const d = await loadAll(s);
+            localStorage.setItem("sk_mat_v2", JSON.stringify(d.materials));
+            localStorage.setItem("sk_tx_v2", JSON.stringify(d.tx));
+            localStorage.setItem("sk_disp_v2", JSON.stringify(d.dispatch));
+        }
+        catch (e) { console.error("SkupOS odczyt tabel:", e); }
+    }
 }
 // ── Kto zalogowany (sesja + profil) ──
 async function sesja() {

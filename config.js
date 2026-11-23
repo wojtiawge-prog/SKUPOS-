@@ -11,3 +11,5 @@ window.SUPA = {
 window.APP_MODE = "local";
 // Adres portalu klienta (zaproszenia, kod QR) — liczony automatycznie, nic nie podmieniasz.
 window.KLIENT_URL = new URL("klient/", location.href).href;
+// Nowa baza (etap 2): odkomentuj po wdrożeniu migracji 0001 + 0002 i imporcie kopii.
+// window.SKUPOS_DB = "tables";

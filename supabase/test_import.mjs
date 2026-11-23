@@ -1,0 +1,15 @@
+import { PGlite } from "@electric-sql/pglite"; import fs from "fs";
+const db=new PGlite();
+await db.exec(`create schema auth; create table auth.users(id uuid primary key);
+create or replace function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid', true),'')::uuid $$;
+create schema storage; create table storage.buckets(id text primary key, name text, public bool, file_size_limit int, allowed_mime_types text[]);
+create table storage.objects(id uuid default gen_random_uuid(), bucket_id text, name text);
+create or replace function storage.foldername(n text) returns text[] language sql as $$ select string_to_array(n,'/') $$;
+create role authenticated; create role anon;`);
+for (const f of ['0001_skupos_core.sql','0002_import_z_aplikacji.sql']) await db.exec(fs.readFileSync('/home/claude/skupos-/supabase/migrations/'+f,'utf8'));
+const o='11111111-1111-1111-1111-111111111111';await db.exec(`insert into auth.users values ('${o}'); set test.uid='${o}';`);
+const f=(await db.query(`select public.zaloz_firme('S','1','Z') f`)).rows[0].f;
+await db.exec(`insert into transakcje(firma_id,app_id,nr,rodzaj,utworzyl) values ('${f}','a1','FPO/2026/11/0057','FPO','${o}')`);
+console.log('ustaw_numeracje:',(await db.query(`select public.ustaw_numeracje() n`)).rows[0].n);
+await db.exec(`insert into transakcje(firma_id,rodzaj,utworzyl) values ('${f}','FPO','${o}')`);
+console.log((await db.query(`select nr from transakcje order by nr`)).rows.map(r=>r.nr).join(', '),'(ma być 0057 i 0058)');
