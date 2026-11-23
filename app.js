@@ -1236,7 +1236,7 @@ function Pulpit({ tx, dispatch, mm, materials, stock, company, setCompany, openI
             reports.slice(0, 14).map((r) => (React.createElement("div", { key: r.id, onClick: () => { setRepOpen(false); setRepDoc({ text: r.text, day: r.dayKey }); }, style: { display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", marginBottom: 7, borderRadius: 12, border: "1px solid var(--line)", background: "var(--surface)", cursor: "pointer" } },
                 React.createElement(FileText, { size: 16, color: "var(--muted)" }),
                 React.createElement("span", { style: { flex: 1, fontSize: 15, fontFamily: "var(--mono)" } }, r.dayKey),
-                React.createElement("button", { onClick: (e) => { e.stopPropagation(); downloadText("raport_" + r.dayKey + ".txt", r.text); }, style: { ...iconBtn, width: 34, height: 34 }, title: "Pobierz .txt" },
+                React.createElement("button", { onClick: (e) => { e.stopPropagation(); downloadText("raport_" + r.dayKey + ".txt", r.text); }, style: { ...iconBtn, width: 44, height: 44 }, title: "Pobierz .txt" },
                     React.createElement(FileText, { size: 15 })),
                 React.createElement(ArrowRight, { size: 15, color: "var(--faint)" }))))),
         React.createElement(Sheet, { open: ctrlOpen, onClose: () => setCtrlOpen(false), title: editCtrl && editCtrl.id ? "Edytuj kontrolę" : "Nowa kontrola" }, editCtrl && (React.createElement(React.Fragment, null,
@@ -1302,7 +1302,8 @@ function Transakcje({ tx, setViewDoc }) {
         React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 12 } }, [["all", "Wszystko"], ["FPO", "FPO (osoby)"], ["KPO", "KPO (firmy)"]].map(([k, l]) => (React.createElement("button", { key: k, onClick: () => setF(k), style: { padding: "8px 14px", borderRadius: 99, cursor: "pointer", fontSize: 14.5, fontWeight: 700, border: f === k ? "1.5px solid var(--copper)" : "1px solid var(--line2)", background: f === k ? "rgba(200,116,63,.1)" : "var(--surface)", color: f === k ? "var(--copper)" : "var(--muted)" } }, l)))),
         React.createElement("div", { style: { marginTop: 14 } }, list.length === 0 ? React.createElement(Card, { style: { textAlign: "center", padding: 30, color: "var(--muted)" } },
             React.createElement(Receipt, { size: 26, color: "var(--faint)", style: { marginBottom: 8 } }),
-            React.createElement("div", { style: { fontSize: 14 } }, "Brak transakcji")) :
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: "var(--text)" } }, q || f !== "all" ? "Nic nie pasuje" : "Jeszcze nic tu nie ma"),
+            React.createElement("div", { style: { fontSize: 14.5, marginTop: 4, lineHeight: 1.5 } }, q || f !== "all" ? "Zmień wyszukiwanie lub filtr." : "Każde przyjęcie (FPO lub KPO) trafi tutaj automatycznie, z numerem i godziną. Zacznij od przycisku „+ Przyjęcie” na dole.")) :
             React.createElement(React.Fragment, null,
                 list.slice(0, lim).map((x, i) => {
                     const d = fmtDateKey(x.ts), prev = i > 0 ? fmtDateKey(list[i - 1].ts) : null;
@@ -2324,7 +2325,7 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch }) {
                 React.createElement("span", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 15, color: "#3f7d8a", whiteSpace: "nowrap" } },
                     "\u2212",
                     kg(d.w)),
-                React.createElement("button", { onClick: () => setDispatch(dispatch.filter((x) => x.id !== d.id)), style: { ...iconBtn, width: 30, height: 30, border: "none", background: "transparent", color: "var(--faint)" } },
+                React.createElement("button", { onClick: () => setDispatch(dispatch.filter((x) => x.id !== d.id)), style: { ...iconBtn, width: 44, height: 44, border: "none", background: "transparent", boxShadow: "none", color: "var(--faint)" }, title: "Usuń", "aria-label": "Usuń" },
                     React.createElement(X, { size: 15 })))))))),
         React.createElement(Sheet, { open: wyd, onClose: () => setWyd(false), title: "Wydanie do kontrahenta" },
             React.createElement("label", { style: label }, "Surowiec"),
@@ -2528,7 +2529,7 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
                         React.createElement("div", { style: { minWidth: 0, paddingRight: 8 } },
                             React.createElement("div", { style: { fontSize: 14.5, fontWeight: 700 } }, p.n),
                             React.createElement("div", { style: { marginTop: 3 } }, codeChip(p.g))),
-                        React.createElement("button", { onClick: () => del(p.rid), style: { ...iconBtn, width: 32, height: 32, border: "none", background: "transparent", color: "var(--faint)" } },
+                        React.createElement("button", { onClick: () => del(p.rid), style: { ...iconBtn, width: 44, height: 44, border: "none", background: "transparent", boxShadow: "none", color: "var(--faint)" }, title: "Usuń pozycję", "aria-label": "Usuń pozycję" },
                             React.createElement(Trash2, { size: 16 }))),
                     React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "flex-end" } },
                         React.createElement("div", { style: { flex: 1.3 } },
@@ -2959,7 +2960,7 @@ function UsersManager({ users, setUsers, currentUser, onClose }) {
                                 ROLE_LABEL[u.role],
                                 " \u00B7 @",
                                 u.login)),
-                        !self && React.createElement("button", { onClick: () => removeUser(u.id), style: { ...iconBtn, width: 34, height: 34, color: "var(--red)", border: "none", background: "rgba(220,38,38,.08)" } },
+                        !self && React.createElement("button", { onClick: () => removeUser(u.id), style: { ...iconBtn, width: 44, height: 44, color: "var(--red)", border: "none", boxShadow: "none", background: "rgba(220,38,38,.08)" }, title: "Usuń konto", "aria-label": "Usuń konto" },
                             React.createElement(Trash2, { size: 15 })))));
             }),
             React.createElement("div", { style: { fontSize: 13, color: "var(--faint)", marginTop: 14, lineHeight: 1.5, textAlign: "center" } }, "Konta i role dzia\u0142aj\u0105 w prototypie lokalnie. Przy wdro\u017Ceniu zast\u0105pi je prawdziwe logowanie (e-mail + has\u0142o, role po stronie serwera, reset has\u0142a)."))));
@@ -3186,7 +3187,7 @@ function Zadania({ zadania, setZadania, users, currentUser, isOwner }) {
                 React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", marginTop: 7, flexWrap: "wrap" } },
                     React.createElement("span", { style: { fontSize: 12.5, color: "var(--muted)", fontWeight: 600 } },
                         "\uD83D\uDC64 ",
-                        userName(z.assignee)),
+                        z.assignee ? userName(z.assignee) : "Nieprzypisane"),
                     z.due && React.createElement("span", { style: { fontSize: 12.5, color: termKol(z.due, z.status), fontWeight: 600 } },
                         "\uD83D\uDCC5 ",
                         z.status === "done" ? z.due : termTxt(z.due)),
