@@ -123,6 +123,19 @@ const seedTx = () => {
 };
 const txTotal = (tx) => tx.pos.reduce((a, p) => a + p.w * p.price, 0);
 const txMass = (tx) => tx.pos.reduce((a, p) => a + p.w, 0);
+/* ── JEDNO miejsce liczenia wyniku: skup = wydatek, przychód = sprzedaż do huty, marża = sprzedaż − koszt sprzedanego towaru ── */
+const calcWynik = (tx, dispatch, materials, keyOk) => {
+    const mm = {}; (materials || []).forEach((m) => { mm[m.id] = m; });
+    const agg = {};
+    (tx || []).forEach((t) => (t.pos || []).forEach((p) => { const a = agg[p.matId] || (agg[p.matId] = { w: 0, v: 0 }); a.w += +p.w || 0; a.v += (+p.w || 0) * (+p.price || 0); }));
+    const avgBuy = (id) => { const a = agg[id]; return a && a.w > 0 ? a.v / a.w : ((mm[id] || {}).buy || 0); };
+    const day = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+    const txs = (tx || []).filter((t) => keyOk(day(t.ts)));
+    const skup = txs.reduce((a, t) => a + txTotal(t), 0), masa = txs.reduce((a, t) => a + txMass(t), 0);
+    let sprzedaz = 0, koszt = 0, sprzMasa = 0;
+    (dispatch || []).filter((d) => keyOk(d.dateKey || day(d.ts))).forEach((d) => { const w = +d.w || 0; const price = d.price != null ? +d.price : ((mm[d.matId] || {}).sell || 0); sprzedaz += w * price; koszt += w * avgBuy(d.matId); sprzMasa += w; });
+    return { skup, masa, sprzedaz, koszt, marza: sprzedaz - koszt, sprzMasa, n: txs.length };
+};
 const supplierName = (tx) => tx.kind === "FPO" ? `${tx.osoba.imie} ${tx.osoba.nazwisko}` : tx.firma.nazwa;
 const PAY = { gotowka: { label: "Gotówka", icon: Banknote }, przelew: { label: "Przelew", icon: CreditCard }, blik: { label: "BLIK", icon: Wallet } };
 /* ─────────── DANE POKAZOWE (tryb demo do sprzedaży) ─────────── */
@@ -782,14 +795,14 @@ export default function App() {
                 hasMag && (activeTab === "mag" || activeTab === "wyw") && segBar([["mag", "Stan magazynu"], ["wyw", "Wywozy"]]),
                 (activeTab === "cennik" || activeTab === "konkur") && segBar([["cennik", "M\u00F3j cennik"], ["konkur", "Ceny u konkurencji"]]),
                 activeTab === "home" && currentUser?.role === "kierowca" && React.createElement(KierowcaHome, { pickups: pickups, setPickups: setPickups, currentUser: currentUser }),
-                activeTab === "home" && currentUser?.role !== "kierowca" && React.createElement(Pulpit, { tx, mm, materials, stock, company, setCompany, openIntake: () => setIntakeOpen(true), setViewDoc, setTab, controls, setControls, settings, setSettings, reports, generateReport, currentUser, isOwner, can, onLogout: logout, openUsers: () => setUsersOpen(true), openPerms: () => setPermsOpen(true), openClient: () => setMode("client"), newReqCount, notifItems, notifCount: notifItems.length, markNotifsRead, notifOn: settings.notif, onEnableNotif: enableNotif, loadDemo, clearDemo }),
+                activeTab === "home" && currentUser?.role !== "kierowca" && React.createElement(Pulpit, { tx, dispatch, mm, materials, stock, company, setCompany, openIntake: () => setIntakeOpen(true), setViewDoc, setTab, controls, setControls, settings, setSettings, reports, generateReport, currentUser, isOwner, can, onLogout: logout, openUsers: () => setUsersOpen(true), openPerms: () => setPermsOpen(true), openClient: () => setMode("client"), newReqCount, notifItems, notifCount: notifItems.length, markNotifsRead, notifOn: settings.notif, onEnableNotif: enableNotif, loadDemo, clearDemo }),
                 activeTab === "tx" && can("transactions") && React.createElement(Transakcje, { tx, setViewDoc }),
                 activeTab === "cennik" && can("cennikView") && React.createElement(Cennik, { materials, setMaterials, canEdit: can("cennikEdit"), company }),
                 activeTab === "intel" && can("cennikView") && React.createElement(InteligencjaCen, { materials, setMaterials, stock }),
                 activeTab === "mag" && can("magazyn") && React.createElement(Magazyn, { materials, stock, mm, dispatch, setDispatch }),
                 activeTab === "mkt" && can("marketing") && React.createElement(Marketing, { requests, materials, campaigns, setCampaigns, tx, company }),
                 activeTab === "wyw" && can("pickups") && React.createElement(Wywozy, { pickups, setPickups }),
-                activeTab === "ksieg" && can("accounting") && React.createElement(Ksiegowosc, { tx, materials, stock, company }),
+                activeTab === "ksieg" && can("accounting") && React.createElement(Ksiegowosc, { tx, dispatch, materials, stock, company }),
                 activeTab === "ai" && (can("marketing") || can("accounting")) && React.createElement(DoradcaBiznesowy, { materials, company, tx }),
                 activeTab === "nadzorca" && (can("marketing") || can("accounting")) && React.createElement(NadzorcaAI, { tx: tx, materials: materials }),
                 activeTab === "social" && can("marketing") && React.createElement(SocialAuto, { materials: materials, company: company }),
@@ -879,7 +892,7 @@ function SegBar({ items, active, onPick }) {
     return (React.createElement("div", { style: { display: "flex", gap: 6, padding: 5, margin: "14px 16px 0", borderRadius: 14, background: "var(--surface2)", border: "1px solid var(--line)" } }, items.map(([id, label]) => React.createElement("button", { key: id, onClick: () => onPick(id), style: { flex: 1, minHeight: 44, borderRadius: 10, border: "none", cursor: "pointer", fontSize: 14.5, fontWeight: 700, background: active === id ? "var(--surface)" : "transparent", color: active === id ? "var(--copper)" : "var(--muted)", boxShadow: active === id ? "0 1px 4px rgba(0,0,0,.15)" : "none" } }, label))));
 }
 /* ─────────── Pulpit ─────────── */
-function Pulpit({ tx, mm, materials, stock, company, setCompany, openIntake, setViewDoc, setTab, controls, setControls, settings, setSettings, reports, generateReport, openClient, currentUser, isOwner, can, onLogout, openUsers, openPerms, newReqCount, notifItems, notifCount, markNotifsRead, notifOn, onEnableNotif, loadDemo, clearDemo }) {
+function Pulpit({ tx, dispatch, mm, materials, stock, company, setCompany, openIntake, setViewDoc, setTab, controls, setControls, settings, setSettings, reports, generateReport, openClient, currentUser, isOwner, can, onLogout, openUsers, openPerms, newReqCount, notifItems, notifCount, markNotifsRead, notifOn, onEnableNotif, loadDemo, clearDemo }) {
     can = can || (() => true);
     notifItems = notifItems || [];
     const [notifOpen, setNotifOpen] = useState(false);
@@ -950,6 +963,21 @@ function Pulpit({ tx, mm, materials, stock, company, setCompany, openIntake, set
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontSize: 13, color: "#aeb7c2" } }, "Warto\u015B\u0107 magazynu"),
                     React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18, color: "#e6a263" } }, plnShort(magValue))))),
+        isOwner && (() => {
+            const mk = new Date().toISOString().slice(0, 7);
+            const W = calcWynik(tx, dispatch, materials, (k) => k.slice(0, 7) === mk);
+            const cell = (l, v, col) => React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", fontWeight: 600 } }, l),
+                React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 800, fontSize: 17, marginTop: 3, color: col || "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, plnShort(v)));
+            return React.createElement(React.Fragment, null,
+                React.createElement("div", { style: sectionTitle }, "Ten miesi\u0105c \u2014 ile zarabiam"),
+                React.createElement(Card, { onClick: () => setTab("ksieg"), style: { cursor: "pointer" } },
+                    React.createElement("div", { style: { display: "flex", gap: 10 } },
+                        cell("Skup", W.skup),
+                        cell("Sprzeda\u017C", W.sprzedaz),
+                        cell("Mar\u017Ca", W.marza, W.marza >= 0 ? "var(--green)" : "var(--red)")),
+                    React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", marginTop: 10 } }, W.sprzMasa > 0 ? `Sprzedane ${kg(W.sprzMasa)} do huty · szczegóły w „Papiery i podatki” →` : "Brak sprzedaży do huty w tym miesiącu — dodaj wydanie w Magazynie")));
+        })(),
         React.createElement("div", { style: sectionTitle }, "Struktura skupu \u2014 dzi\u015B"),
         React.createElement(Card, null, groups.length === 0 ? React.createElement("div", { style: { color: "var(--muted)", fontSize: 15, padding: "8px 2px" } }, "Brak przyj\u0119\u0107 dzisiaj. Dodaj pierwsze \u2193") :
             groups.map(([g, val]) => (React.createElement("div", { key: g, style: { marginBottom: 12 } },
@@ -2267,6 +2295,12 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
             o.push(`Numer dowodu „${osoba.dowod}" ma nietypowy format (np. ABC 123456).`);
         return o;
     })();
+    const topMats = (() => {
+        const since = Date.now() - 30 * 86400000, cnt = {};
+        (tx || []).forEach((t) => { if (t.ts >= since) (t.pos || []).forEach((p) => { cnt[p.matId] = (cnt[p.matId] || 0) + 1; }); });
+        const inPos = new Set(pos.map((p) => p.matId));
+        return Object.entries(cnt).sort((a, b) => b[1] - a[1]).map(([id]) => materials.find((m) => m.id === id)).filter((m) => m && !inPos.has(m.id)).slice(0, 6);
+    })();
     const addPos = (m) => { setPos((p) => [...p, { rid: uid(), matId: m.id, n: m.n, g: m.g, w: 0, price: m.buy }]); setPicker(false); };
     const upd = (rid, patch) => setPos((p) => p.map((x) => x.rid === rid ? { ...x, ...patch } : x));
     const del = (rid) => setPos((p) => p.filter((x) => x.rid !== rid));
@@ -2381,7 +2415,7 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
                         React.createElement("div", { style: { flex: 1.3 } },
                             React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)", marginBottom: 4 } }, "Masa (kg)"),
                             React.createElement("div", { style: { display: "flex", gap: 6 } },
-                                React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, padding: "11px 12px" }, type: "number", inputMode: "decimal", value: p.w, placeholder: "0", onChange: (e) => upd(p.rid, { w: e.target.value }) }))),
+                                React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, padding: "11px 12px" }, type: "number", inputMode: "decimal", value: p.w || "", placeholder: "0", autoFocus: true, onChange: (e) => upd(p.rid, { w: e.target.value }) }))),
                         React.createElement("div", { style: { flex: 1 } },
                             React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)", marginBottom: 4 } }, "Cena z\u0142/kg"),
                             React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, padding: "11px 12px" }, type: "number", inputMode: "decimal", value: p.price, placeholder: "0", onChange: (e) => upd(p.rid, { price: e.target.value }) }))),
@@ -2389,6 +2423,11 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
                         React.createElement("span", { style: { fontSize: 13.5, color: "var(--muted)" } }, "Warto\u015B\u0107 pozycji"),
                         React.createElement("span", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 16, color: "var(--copper)" } }, pln(p.w * p.price)))));
             }),
+            topMats.length > 0 && (React.createElement("div", { style: { marginBottom: 10 } },
+                React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", fontWeight: 700, marginBottom: 7 } }, "Najcz\u0119\u015Bciej skupowane \u2014 dotknij, aby doda\u0107"),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, topMats.map((m) => React.createElement("button", { key: m.id, onClick: () => addPos(m), style: { minHeight: 52, padding: "8px 12px", borderRadius: 14, border: "1px solid var(--line2)", background: "var(--surface)", cursor: "pointer", textAlign: "left", color: "var(--text)" } },
+                    React.createElement("div", { style: { fontSize: 14.5, fontWeight: 700, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, m.n),
+                    React.createElement("div", { style: { fontSize: 13, color: "var(--copper)", fontFamily: "var(--mono)", fontWeight: 700, marginTop: 2 } }, (+m.buy).toFixed(2), " z\u0142/kg")))))),
             React.createElement("button", { onClick: () => setPicker(true), style: { ...btnGhost, borderStyle: "dashed", color: "var(--copper)", borderColor: "rgba(200,116,63,.5)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
                 React.createElement(Plus, { size: 17 }),
                 " Dodaj pozycj\u0119 z cennika"),
@@ -3987,14 +4026,15 @@ function RentownoscMaterialow({ tx, materials, stock, month }) {
         React.createElement("div", { style: { fontSize: 12.5, color: "var(--faint)", marginTop: 10, lineHeight: 1.5, textAlign: "center" } }, "Miejsce na placu szacowane z g\u0119sto\u015Bci nasypowej. Zysk liczony z transakcji miesi\u0105ca.")));
 }
 /* ─────────── Historia zysków (trend miesiąc do miesiąca) ─────────── */
-function HistoriaZyskow({ tx, materials, kupTot, month }) {
+function HistoriaZyskow({ tx, materials, kupTot, month, dispatch }) {
     // Realny zysk z bieżącego miesiąca z transakcji
     const matSell = {};
     (materials || []).forEach(m => { matSell[m.id] = m.sell; });
     const txMonth = (tx || []).filter(x => fmtDateKey(x.ts).slice(0, 7) === month);
-    const przychodBiez = txMonth.reduce((a, x) => a + (x.pos || []).reduce((b, p) => b + p.w * (matSell[p.matId] || p.price), 0), 0);
-    const kosztBiez = txMonth.reduce((a, x) => a + txTotal(x), 0);
-    const zyskBiez = przychodBiez - kosztBiez - (kupTot || 0);
+    const Wb = calcWynik(tx, dispatch, materials, (k) => k.slice(0, 7) === month); // ten sam kalkulator co „Papiery”
+    const przychodBiez = Wb.sprzedaz;
+    const kosztBiez = Wb.koszt;
+    const zyskBiez = Wb.marza - (kupTot || 0);
     // Dane historyczne (edytowalne, zapis lokalny) — właściciel uzupełnia minione miesiące
     const [hist, setHist] = useState(() => {
         try {
@@ -4329,7 +4369,7 @@ function PCC4Export({ tx, company, month, setMonth }) {
         React.createElement("div", { style: { fontSize: 12.5, color: "var(--faint)", marginTop: 10, lineHeight: 1.5, textAlign: "center" } }, "Dokument pomocniczy \u2014 zweryfikuj z ksi\u0119gowym przed wys\u0142aniem do US.")));
 }
 /* ─────────── Księgowość ─────────── */
-function Ksiegowosc({ tx, materials, stock, company }) {
+function Ksiegowosc({ tx, materials, stock, company, dispatch }) {
     const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
     const [activeTab, setActiveTab] = useState("rozliczenie");
     const [grupa, setGrupa] = useState("finanse");
@@ -4362,7 +4402,8 @@ function Ksiegowosc({ tx, materials, stock, company }) {
     const mass = inM.reduce((a, x) => a + txMass(x), 0);
     const kupMonth = kupItems.filter(k => (k.date || "").slice(0, 7) === month);
     const kupTot = kupMonth.reduce((a, k) => a + (parseFloat(k.netto) || 0), 0);
-    const dochod = tot - kupTot;
+    const W = calcWynik(tx, dispatch, materials, (k) => k.slice(0, 7) === month);
+    const dochod = W.marza - kupTot;
     const KUP_CATS = ["Paliwo / transport", "Najem placu / hali", "Media (prąd, woda, gaz)", "Telefon / internet", "Pracownicy (wynagrodzenia)", "ZUS własny", "Obsługa księgowa", "Leasing samochodu", "Waga / sprzęt (amortyzacja)", "Materiały biurowe", "Opłaty BDO", "PCC zapłacone", "Inne koszty firmowe"];
     const buildStatement = () => {
         let t = "ZESTAWIENIE KSIEGOWE — " + month + "\n" + (company?.name || "(punkt skupu)") + "\n";
@@ -4377,7 +4418,9 @@ function Ksiegowosc({ tx, materials, stock, company }) {
         t += "KOSZTY UZYSKANIA PRZYCHODU (KUP):\n";
         kupMonth.forEach(k => { t += "  " + (k.cat || "Inne").padEnd(28) + k.netto?.toFixed(2) + " zl\n"; });
         t += "  RAZEM KUP:         " + kupTot.toFixed(2) + " zl\n\n";
-        t += "DOCHÓD (przed podatkiem): " + dochod.toFixed(2) + " zl\n\n";
+        t += "SPRZEDAŻ DO HUTY (szac. wg cennika sprzedaży): " + W.sprzedaz.toFixed(2) + " zl\n";
+        t += "MARŻA NA SPRZEDANYM TOWARZE: " + W.marza.toFixed(2) + " zl\n";
+        t += "ZYSK SZACUNKOWY (marża − KUP, przed podatkiem): " + dochod.toFixed(2) + " zl\n\n";
         t += "PODATKI:\n";
         t += "  PCC 2% (od FPO):   " + pcc.toFixed(2) + " zl\n";
         t += "  FPO wartość:       " + fpoTot.toFixed(2) + " zl\n\n";
@@ -4435,7 +4478,7 @@ function Ksiegowosc({ tx, materials, stock, company }) {
             React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
                 React.createElement("label", { style: { fontSize: 14, color: "var(--muted)", fontWeight: 600 } }, "Miesi\u0105c:"),
                 React.createElement("input", { type: "month", value: month, onChange: (e) => setMonth(e.target.value), style: { ...inputStyle, flex: 1, colorScheme: "light", fontFamily: "var(--mono)", fontWeight: 700 } })),
-            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 } }, [["Przychód (skup)", pln(tot), null], ["Masa skupiona", kg(mass), null], ["Koszty KUP", pln(kupTot), "var(--red)"], ["Dochód szacunkowy", pln(dochod), dochod >= 0 ? "var(--green)" : "var(--red)"]].map(([l, v, col]) => (React.createElement(Card, { key: l, pad: 13 },
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 } }, [["Wydano na skup", pln(tot), null], ["Sprzeda\u017C do huty (szac.)", pln(W.sprzedaz), null], ["Mar\u017Ca na sprzedanym", pln(W.marza), W.marza >= 0 ? "var(--green)" : "var(--red)"], ["Zysk po kosztach KUP", pln(dochod), dochod >= 0 ? "var(--green)" : "var(--red)"]].map(([l, v, col]) => (React.createElement(Card, { key: l, pad: 13 },
                 React.createElement("div", { style: { fontSize: 13, color: "var(--muted)" } }, l),
                 React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 800, fontSize: 19, marginTop: 4, color: col || "var(--text)" } }, v))))),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 9, marginBottom: 12 } }, [["Dokumenty", inM.length + " szt."], ["FPO/KPO", fpo.length + "/" + kpo.length], ["Wartość mag.", pln(magVal)]].map(([l, v]) => (React.createElement(Card, { key: l, pad: 11 },
@@ -4461,7 +4504,7 @@ function Ksiegowosc({ tx, materials, stock, company }) {
             React.createElement("div", { style: { fontSize: 12.5, color: "var(--faint)", marginTop: 8, lineHeight: 1.5, textAlign: "center" } }, "Warto\u015Bci pomocnicze \u2014 nie zast\u0119puj\u0105 profesjonalnej ksi\u0119gowo\u015Bci."))),
         activeTab === "zysk" && React.createElement(KalkulatorZysku, { materials: materials, stock: stock, tx: tx, kupMonth: kupMonth, kupTot: kupTot, month: month }),
         activeTab === "pcc4" && React.createElement(PCC4Export, { tx: tx, company: company, month: month, setMonth: setMonth }),
-        activeTab === "historia" && React.createElement(HistoriaZyskow, { tx: tx, materials: materials, kupTot: kupTot, month: month }),
+        activeTab === "historia" && React.createElement(HistoriaZyskow, { tx: tx, dispatch: dispatch, materials: materials, kupTot: kupTot, month: month }),
         activeTab === "rentownosc" && React.createElement(RentownoscMaterialow, { tx: tx, materials: materials, stock: stock, month: month }),
         activeTab === "checklist" && (React.createElement("div", { style: { marginTop: 14 } },
             React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
