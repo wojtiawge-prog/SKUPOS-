@@ -129,3 +129,5 @@ grant execute on function public.my_firma(), public.my_rola(), public.is_staff()
   public.zaloz_firme(text,text,text,text,text,text), public.dolacz_jako_klient(uuid,text,text),
   public.utworz_zaproszenie(public.rola), public.przyjmij_zaproszenie(text,text,text),
   public.ai_zuzyj(int), public.ustaw_numeracje() to authenticated;
+-- funkcje wyzwalaczy nie są do wywoływania z API
+revoke execute on function public.nadaj_numer(), public.zapisz_dziennik(), public.blokuj_kasowanie(), public.ustawienia_stempel() from authenticated;
