@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Scale, Recycle, Receipt, Banknote, Building2, User, Truck, Warehouse, Factory, Camera, ScanLine, Search, Plus, Coins, TrendingUp, FileText, ChevronRight, ChevronLeft, Check, X, Trash2, ArrowRight, MapPin, Wallet, BadgeCheck, Clock, AlertTriangle, Settings, CreditCard, Printer, Smartphone, Bell, RefreshCw, Sparkles, Calculator, LogOut, Inbox, Send, MessageSquare, ShieldCheck, Megaphone, MoreHorizontal, Users, Download } from "lucide-react";
 /* ─────────── storage ─────────── */
 const mem = new Map();
@@ -2357,6 +2358,8 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
     const [photo, setPhoto] = useState(false);
     const [zrodlo, setZrodlo] = useState("");
     const [oswOk, setOswOk] = useState(false);
+    const [produkt, setProdukt] = useState("");
+    const [uwagi, setUwagi] = useState("");
     const [warnOpen, setWarnOpen] = useState(true);
     const [picker, setPicker] = useState(false);
     const [weighing, setWeighing] = useState(null);
@@ -2441,12 +2444,12 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
             setErr("Uzupełnij nazwę firmy i NIP.");
             return;
         }
-        const data = { kind, payment, plate: plate.trim().toUpperCase(), pos: pos.map(({ rid, ...r }) => ({ ...r, w: numI(r.w), price: numI(r.price) })), ...(photo ? { photo } : {}), ...(kind === "FPO" ? { osoba, zrodlo: zrodlo.trim(), osw: true } : { firma }) };
+        const data = { kind, payment, plate: plate.trim().toUpperCase(), pos: pos.map(({ rid, ...r }) => ({ ...r, w: numI(r.w), price: numI(r.price) })), ...(photo ? { photo } : {}), ...(kind === "FPO" ? { osoba, zrodlo: zrodlo.trim(), osw: true, ...(produkt.trim() ? { produkt: produkt.trim() } : {}), ...(uwagi.trim() ? { uwagi: uwagi.trim() } : {}) } : { firma }) };
         const t = commitIntake(data);
         setResult(t);
     };
     if (result)
-        return React.createElement(DocOverlay, { tx: result, company: company, onClose: onClose, onNew: () => { setResult(null); setOsoba({ imie: "", nazwisko: "", adres: "", dowod: "", scanned: false }); setFirma({ nazwa: "", nip: "" }); setPlate(""); setPos([]); setPhoto(false); setZrodlo(""); setOswOk(false); setErr(""); }, created: true });
+        return React.createElement(DocOverlay, { tx: result, company: company, onClose: onClose, onNew: () => { setResult(null); setOsoba({ imie: "", nazwisko: "", adres: "", dowod: "", scanned: false }); setFirma({ nazwa: "", nip: "" }); setPlate(""); setPos([]); setPhoto(false); setZrodlo(""); setProdukt(""); setUwagi(""); setOswOk(false); setErr(""); }, created: true });
     return (React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 70, background: "var(--bg)", display: "flex", flexDirection: "column", maxWidth: 480, margin: "0 auto" } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, padding: "calc(12px + env(safe-area-inset-top)) 16px 12px", borderBottom: "1px solid var(--line)", background: "var(--surface)" } },
             React.createElement("button", { onClick: onClose, style: iconBtn },
@@ -2554,6 +2557,10 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
                     return (React.createElement("button", { key: z, onClick: () => setZrodlo(z === "Inne" ? "Inne: " : z), style: { padding: "9px 13px", borderRadius: 99, cursor: "pointer", fontSize: 14, fontWeight: 700, border: act ? "1.5px solid var(--copper)" : "1px solid var(--line2)", background: act ? "rgba(200,116,63,.1)" : "var(--surface)", color: act ? "var(--copper)" : "var(--muted)" } }, z));
                 })),
                 zrodlo.startsWith("Inne") && React.createElement("input", { style: { ...inputStyle, marginBottom: 10 }, placeholder: "Wpisz \u017Ar\u00F3d\u0142o pochodzenia (np. rozbi\u00F3rka altany na w\u0142asnej dzia\u0142ce)", value: zrodlo.replace(/^Inne: ?/, ""), onChange: (e) => setZrodlo("Inne: " + e.target.value) }),
+                React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", fontWeight: 700, margin: "2px 0 7px" } }, "Z czego powsta\u0142y odpady (rodzaj produktu)"),
+                React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 } }, ["Rury i rynny", "Felgi", "Kable z remontu", "Sprzęt AGD", "Części maszyn", "Konstrukcja stalowa", "Akumulator samochodowy"].map((z) => React.createElement("button", { key: z, onClick: () => setProdukt(z), style: { padding: "8px 12px", borderRadius: 99, cursor: "pointer", fontSize: 13.5, fontWeight: 700, border: produkt === z ? "1.5px solid var(--copper)" : "1px solid var(--line2)", background: produkt === z ? "var(--copperSoft)" : "var(--surface)", color: produkt === z ? "var(--copper)" : "var(--text)" } }, z))),
+                React.createElement("input", { style: { ...inputStyle, marginBottom: 10 }, placeholder: "Albo wpisz (np. stare grzejniki \u017Celiwne)", value: produkt, onChange: (e) => setProdukt(e.target.value) }),
+                React.createElement("input", { style: { ...inputStyle, marginBottom: 10 }, placeholder: "Uwagi (opcjonalnie)", value: uwagi, onChange: (e) => setUwagi(e.target.value) }),
                 React.createElement("label", { style: { display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 13px", borderRadius: 12, border: oswOk ? "1.5px solid var(--green)" : "1px solid var(--line2)", background: oswOk ? "rgba(21,163,74,.08)" : "var(--surface)", cursor: "pointer", marginBottom: 14 } },
                     React.createElement("input", { type: "checkbox", checked: oswOk, onChange: (e) => setOswOk(e.target.checked), style: { width: 18, height: 18, marginTop: 1, accentColor: "#15a34a", flexShrink: 0 } }),
                     React.createElement("span", { style: { fontSize: 13, lineHeight: 1.55 } },
@@ -2618,6 +2625,82 @@ function MaterialPicker({ open, onClose, materials, onPick }) {
                     React.createElement(Plus, { size: 16, color: "var(--faint)" }))))));
         }))));
 }
+/* ─────────── Wydruk FPO wg wzoru (Dz.U. 2013 poz. 1607) ─────────── */
+const mgFmt = (kgv) => { const v = (+kgv || 0) / 1000; return v.toFixed(kgv < 1 ? 4 : 3).replace(".", ","); };
+const zlFmt = (v) => (Math.round((+v || 0) * 100) / 100).toFixed(2).replace(".", ",");
+function drukuj(tryb) {
+    document.body.setAttribute("data-druk", tryb);
+    const po = () => { document.body.removeAttribute("data-druk"); window.removeEventListener("afterprint", po); };
+    window.addEventListener("afterprint", po);
+    try { window.print(); } catch (e) { }
+    setTimeout(po, 60000);
+}
+function FpoEgzemplarz({ tx, company, dla, waska }) {
+    const fs = waska ? 10.5 : 11.5;
+    const cell = { border: "1px solid #000", padding: waska ? "3px 4px" : "5px 6px", fontSize: fs, verticalAlign: "top", textAlign: "left" };
+    const lab = { fontSize: waska ? 9 : 9.5, color: "#333", display: "block", marginBottom: 1 };
+    const sumKg = tx.pos.reduce((a, p) => a + (+p.w || 0), 0);
+    const sumZl = tx.pos.reduce((a, p) => a + (+p.w || 0) * (+p.price || 0), 0);
+    const prod = (p) => p.produkt || tx.produkt || "—";
+    const sekcja = (t) => React.createElement("div", { style: { fontWeight: 800, fontSize: fs, margin: waska ? "7px 0 3px" : "10px 0 4px" } }, t);
+    return React.createElement("div", { className: "fpo-egz", style: { color: "#000", background: "#fff", fontFamily: "Arial, Helvetica, sans-serif", width: waska ? "76mm" : "auto" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" } },
+            React.createElement("div", { style: { fontWeight: 900, fontSize: waska ? 12 : 15 } }, "FORMULARZ PRZYJĘCIA ODPADÓW METALI"),
+            React.createElement("div", { style: { fontSize: fs, textAlign: "right", whiteSpace: "nowrap" } }, "Nr formularza: ", React.createElement("b", null, tx.no))),
+        React.createElement("div", { style: { fontSize: waska ? 9 : 10, marginTop: 2 } }, "Egzemplarz dla: ", React.createElement("b", null, dla)),
+        sekcja("1. Osoba przekazująca odpady"),
+        React.createElement("table", { style: { width: "100%", borderCollapse: "collapse" } }, React.createElement("tbody", null,
+            React.createElement("tr", null, React.createElement("td", { style: cell }, React.createElement("span", { style: lab }, "Imię i nazwisko"), ((tx.osoba && tx.osoba.imie) || "") + " " + ((tx.osoba && tx.osoba.nazwisko) || ""))),
+            React.createElement("tr", null, React.createElement("td", { style: cell }, React.createElement("span", { style: lab }, "Adres"), (tx.osoba && tx.osoba.adres) || "")),
+            React.createElement("tr", null, React.createElement("td", { style: cell }, React.createElement("span", { style: lab }, "Numer dowodu osobistego lub innego dokumentu stwierdzającego tożsamość"), (tx.osoba && tx.osoba.dowod) || "")))),
+        sekcja("2. Przekazanie odpadów"),
+        React.createElement("table", { style: { width: "100%", borderCollapse: "collapse" } }, React.createElement("tbody", null,
+            React.createElement("tr", null,
+                React.createElement("td", { style: cell }, React.createElement("span", { style: lab }, "Data przyjęcia odpadów"), fmtDate(tx.ts)),
+                React.createElement("td", { style: cell }, React.createElement("span", { style: lab }, "Źródło pochodzenia odpadów"), tx.zrodlo || "")))),
+        waska
+            ? React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", marginTop: 4 } }, React.createElement("tbody", null,
+                tx.pos.map((p, i) => React.createElement("tr", { key: i }, React.createElement("td", { style: cell },
+                    React.createElement("div", null, React.createElement("b", null, C[p.g].code), " · ", C[p.g].label),
+                    React.createElement("div", null, "Produkt: ", prod(p)),
+                    React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, React.createElement("span", null, "Masa: ", mgFmt(p.w), " Mg"), React.createElement("span", null, "Wartość: ", zlFmt(p.w * p.price), " zł"))))),
+                React.createElement("tr", null, React.createElement("td", { style: { ...cell, fontWeight: 800 } }, React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, React.createElement("span", null, "Suma: ", mgFmt(sumKg), " Mg"), React.createElement("span", null, zlFmt(sumZl), " zł"))))))
+            : React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", marginTop: 6 } },
+                React.createElement("thead", null, React.createElement("tr", null, ["Kod odpadów", "Rodzaj odpadów", "Rodzaj produktu, z którego powstały odpady", "Masa odpadów [Mg]", "Wartość odpadów [zł]"].map((h) => React.createElement("th", { key: h, style: { ...cell, fontSize: 9.5, fontWeight: 700, background: "#f2f2f2" } }, h)))),
+                React.createElement("tbody", null,
+                    tx.pos.map((p, i) => React.createElement("tr", { key: i },
+                        React.createElement("td", { style: { ...cell, whiteSpace: "nowrap" } }, C[p.g].code),
+                        React.createElement("td", { style: cell }, C[p.g].label + (p.n && p.n !== C[p.g].label ? " (" + p.n + ")" : "")),
+                        React.createElement("td", { style: cell }, prod(p)),
+                        React.createElement("td", { style: { ...cell, textAlign: "right", whiteSpace: "nowrap" } }, mgFmt(p.w)),
+                        React.createElement("td", { style: { ...cell, textAlign: "right", whiteSpace: "nowrap" } }, zlFmt(p.w * p.price)))),
+                    React.createElement("tr", null,
+                        React.createElement("td", { style: { ...cell, fontWeight: 800, textAlign: "right" }, colSpan: 3 }, "Suma"),
+                        React.createElement("td", { style: { ...cell, fontWeight: 800, textAlign: "right" } }, mgFmt(sumKg)),
+                        React.createElement("td", { style: { ...cell, fontWeight: 800, textAlign: "right" } }, zlFmt(sumZl))))),
+        sekcja("3. Oświadczenie przekazującego odpady"),
+        React.createElement("div", { style: { ...cell, lineHeight: 1.45 } }, "Oświadczam, że przekazywane odpady stanowią moją własność, nie są obciążone prawami osób trzecich oraz nie pochodzą z kradzieży."),
+        sekcja("4. Uwagi"),
+        React.createElement("div", { style: { ...cell, minHeight: waska ? 14 : 26 } }, [tx.uwagi, tx.plate ? "Pojazd: " + tx.plate : "", "Płatność: " + ((PAY[tx.payment] && PAY[tx.payment].label) || "")].filter(Boolean).join(" · ")),
+        sekcja("5. Posiadacz odpadów przyjmujący odpady"),
+        React.createElement("div", { style: cell }, React.createElement("span", { style: lab }, "Imię i nazwisko lub nazwa"), company.name, company.addr ? ", " + company.addr : "", company.nip ? " · NIP " + company.nip : "", company.bdo ? " · BDO " + company.bdo : ""),
+        React.createElement("div", { style: { display: "flex", gap: 14, marginTop: waska ? 22 : 38 } },
+            React.createElement("div", { style: { flex: 1, borderTop: "1px solid #000", paddingTop: 3, fontSize: waska ? 9 : 10, textAlign: "center" } }, "Data i podpis przyjmującego odpady"),
+            React.createElement("div", { style: { flex: 1, borderTop: "1px solid #000", paddingTop: 3, fontSize: waska ? 9 : 10, textAlign: "center" } }, "Podpis osoby przekazującej odpady")),
+        React.createElement("div", { style: { fontSize: waska ? 8 : 8.5, color: "#333", marginTop: waska ? 8 : 14, lineHeight: 1.4 } }, "Wzór wg rozporządzenia Ministra Środowiska z 9.12.2013 r. (Dz.U. 2013 poz. 1607), art. 102 ustawy o odpadach. Masa w Mg z dokładnością do trzech miejsc po przecinku (poniżej 1 kg — czterech). Oświadczenie nie zwalnia przyjmującego z odpowiedzialności wynikającej z Kodeksu karnego i Kodeksu wykroczeń."));
+}
+function FpoWydruk({ tx, company }) {
+    if (tx.kind !== "FPO" || typeof document === "undefined") return null;
+    return createPortal(React.createElement("div", { className: "fpo-wydruk" },
+        React.createElement("div", { className: "fpo-a4" },
+            React.createElement(FpoEgzemplarz, { tx, company, dla: "przekazującego" }),
+            React.createElement("div", { style: { breakBefore: "page", pageBreakBefore: "always" } }),
+            React.createElement(FpoEgzemplarz, { tx, company, dla: "przyjmującego" })),
+        React.createElement("div", { className: "fpo-80" },
+            React.createElement(FpoEgzemplarz, { tx, company, dla: "przekazującego", waska: true }),
+            React.createElement("div", { style: { borderTop: "1px dashed #000", margin: "10px 0", textAlign: "center", fontSize: 9 } }, "✂ odetnij"),
+            React.createElement(FpoEgzemplarz, { tx, company, dla: "przyjmującego", waska: true }))), document.body);
+}
 /* ─────────── Document (FPO/KPO) ─────────── */
 function DocOverlay({ tx, company, onClose, onNew, created, onDelete }) {
     const total = txTotal(tx);
@@ -2628,7 +2711,11 @@ function DocOverlay({ tx, company, onClose, onNew, created, onDelete }) {
             React.createElement("button", { onClick: onClose, style: iconBtn },
                 React.createElement(X, { size: 19 })),
             React.createElement("div", { style: { flex: 1, fontFamily: "var(--display)", fontSize: 17, fontWeight: 800 } }, tx.kind === "FPO" ? "Formularz FPO" : "Karta KPO"),
-            React.createElement("button", { onClick: () => { try {
+            tx.kind === "FPO" ? React.createElement(React.Fragment, null,
+                React.createElement("button", { onClick: () => drukuj("a4"), title: "A4 — dwa egzemplarze (wzór urzędowy) / zapis do PDF", style: { ...iconBtn, width: "auto", padding: "0 11px", gap: 6, fontSize: 14, fontWeight: 700, color: "var(--copper)" } },
+                    React.createElement(Printer, { size: 16 }), " A4 / PDF"),
+                React.createElement("button", { onClick: () => drukuj("80"), title: "Drukarka paragonowa 80 mm — dwa egzemplarze", style: { ...iconBtn, width: "auto", padding: "0 11px", gap: 6, fontSize: 14, fontWeight: 700 } },
+                    React.createElement(Printer, { size: 16 }), " 80 mm")) : React.createElement("button", { onClick: () => { try {
                     window.print();
                 }
                 catch (e) { } }, style: { ...iconBtn, width: "auto", padding: "0 13px", gap: 7, fontSize: 14.5, fontWeight: 700, color: "var(--copper)" } },
@@ -2651,7 +2738,7 @@ function DocOverlay({ tx, company, onClose, onNew, created, onDelete }) {
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: "var(--display)", fontWeight: 800, fontSize: 15 } }, "Przyj\u0119cie zapisane"),
                     React.createElement("div", { style: { fontSize: 14, color: "var(--muted)" } }, "Dodano do ewidencji \u00B7 wpis do BDO")))),
-            React.createElement("div", { id: "fpo-doc", className: "print-target", style: { background: "#fff", border: "1px solid var(--line)", borderRadius: 14, padding: 18, boxShadow: "0 10px 30px -18px rgba(0,0,0,.4)" } },
+            React.createElement("div", { id: "fpo-doc", className: tx.kind === "FPO" ? "fpo-podglad" : "print-target", style: { background: "#fff", border: "1px solid var(--line)", borderRadius: 14, padding: 18, boxShadow: "0 10px 30px -18px rgba(0,0,0,.4)" } },
                 React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid var(--text)", paddingBottom: 12 } },
                     React.createElement("div", null,
                         React.createElement("div", { style: { fontFamily: "var(--display)", fontWeight: 800, fontSize: 15, lineHeight: 1.15 } }, tx.kind === "FPO" ? "FORMULARZ PRZYJĘCIA ODPADÓW METALI" : "KARTA PRZEKAZANIA ODPADU"),
@@ -2725,6 +2812,7 @@ function DocOverlay({ tx, company, onClose, onNew, created, onDelete }) {
                     React.createElement("div", { style: { textAlign: "center", width: "45%" } },
                         React.createElement("div", { style: { borderTop: "1px solid var(--text)", paddingTop: 5, fontSize: 11.5, color: "var(--muted)" } }, "Podpis przyjmuj\u0105cego"))),
                 tx.kind === "FPO" && React.createElement("div", { style: { fontSize: 11, color: "var(--faint)", marginTop: 12, lineHeight: 1.5 } }, "Formularz przyj\u0119cia odpad\u00F3w metali prowadzony zgodnie z art. 102 ustawy o odpadach. Stanowi umow\u0119 kupna-sprzeda\u017Cy (PCC 2% po stronie przyjmuj\u0105cego). Dane przekazuj\u0105cego oraz \u017Ar\u00F3d\u0142o pochodzenia trafiaj\u0105 do ewidencji odpad\u00F3w i BDO."))),
+        React.createElement(FpoWydruk, { tx: tx, company: company }),
         React.createElement("div", { className: "no-print", style: { padding: "12px 16px calc(12px + env(safe-area-inset-bottom))", background: "var(--surface)", borderTop: "1px solid var(--line)", display: "flex", gap: 10 } },
             onNew && React.createElement("button", { onClick: onNew, style: { ...btnGhost, flex: 1 } }, "Nowe przyj\u0119cie"),
             React.createElement("button", { onClick: onClose, style: { ...btnCopper, flex: 1 } }, "Gotowe"))));
@@ -5542,6 +5630,17 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   .no-print { display:none !important; }
 }
 @page { size:A4; margin:14mm; }
+.fpo-wydruk { display:none; }
+@page tasma80 { size:80mm 297mm; margin:2mm; }
+.fpo-80 { page:tasma80; }
+@media print {
+  body[data-druk] > *:not(.fpo-wydruk) { display:none !important; }
+  body[data-druk] .fpo-wydruk { display:block !important; position:static !important; width:100%; }
+  body[data-druk] .fpo-wydruk, body[data-druk] .fpo-wydruk * { visibility:visible !important; }
+  body[data-druk="a4"] .fpo-80, body[data-druk="80"] .fpo-a4 { display:none !important; }
+  body[data-druk] .fpo-podglad { display:none !important; }
+  body[data-druk] .fpo-egz { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
 
 /* ═══════════ TRYB DESKTOP (>=1024px) — mobile bez zmian ═══════════ */
 @media (min-width: 1024px) {
