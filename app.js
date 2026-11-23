@@ -364,21 +364,21 @@ function resizeImage(file, maxDim = 900, quality = 0.6) {
     });
 }
 /* ─────────── UI atoms ─────────── */
-const Card = ({ children, style, onClick, pad = 16 }) => (React.createElement("div", { onClick: onClick, className: "sk-card", style: { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 18, padding: pad, boxShadow: "0 1px 2px rgba(0,0,0,.18), 0 10px 30px -18px rgba(0,0,0,.5)", ...style } }, children));
+const Card = ({ children, style, onClick, pad = 16 }) => (React.createElement("div", { onClick: onClick, className: "sk-card", style: { background: "var(--surface)", border: "var(--cardBorder)", borderRadius: 22, padding: pad, boxShadow: "var(--cardShadow)", ...style } }, children));
 const Bar = ({ pct, color = "var(--copper)", h = 8, bg = "var(--track)" }) => (React.createElement("div", { style: { width: "100%", height: h, borderRadius: 99, background: bg, overflow: "hidden" } },
     React.createElement("div", { style: { width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", borderRadius: 99, background: color, transition: "width .7s cubic-bezier(.2,.8,.2,1)" } })));
 const codeChip = (g) => (React.createElement("span", { style: { fontFamily: "var(--mono)", fontSize: 12, fontWeight: 700, color: C[g].color, background: C[g].color + "1a", borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap" } }, C[g].code));
-const iconBtn = { width: 42, height: 42, borderRadius: 13, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text)", display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0 };
-const inputStyle = { width: "100%", padding: "14px 15px", borderRadius: 14, border: "1px solid var(--line2)", background: "var(--surface)", color: "var(--text)", fontSize: 15.5, fontFamily: "var(--body)", outline: "none", boxSizing: "border-box" };
+const iconBtn = { width: 44, height: 44, borderRadius: 15, border: "var(--cardBorder)", background: "var(--surface)", color: "var(--text)", display: "grid", placeItems: "center", cursor: "pointer", flexShrink: 0, boxShadow: "var(--cardShadow)" };
+const inputStyle = { width: "100%", padding: "15px 16px", borderRadius: 15, border: "1.5px solid transparent", background: "var(--field)", color: "var(--text)", fontSize: 16, fontWeight: 500, fontFamily: "var(--body)", outline: "none", boxSizing: "border-box" };
 const label = { fontSize: 14, color: "var(--muted)", fontWeight: 600, margin: "12px 0 6px", display: "block" };
-const btnCopper = { width: "100%", padding: "16px", borderRadius: 15, border: "none", cursor: "pointer", background: "linear-gradient(135deg, #cd7b45, #a85829)", color: "#fff", fontWeight: 800, fontSize: 16, fontFamily: "var(--display)", letterSpacing: ".01em", boxShadow: "0 12px 26px -10px rgba(168,88,41,.65)", display: "flex", alignItems: "center", justifyContent: "center", gap: 9 };
-const btnGhost = { width: "100%", padding: "15px", borderRadius: 15, border: "1px solid var(--line2)", cursor: "pointer", background: "var(--surface)", color: "var(--text)", fontWeight: 700, fontSize: 15, fontFamily: "var(--display)" };
-const sectionTitle = { fontFamily: "var(--display)", fontSize: 13.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".08em", margin: "26px 2px 13px" };
+const btnCopper = { width: "100%", padding: "17px", borderRadius: 17, border: "none", cursor: "pointer", background: "var(--grad)", color: "#fff", fontWeight: 800, fontSize: 16.5, fontFamily: "var(--display)", letterSpacing: "-.01em", boxShadow: "0 14px 28px -12px rgba(180,80,27,.7), inset 0 1px 0 rgba(255,255,255,.25)", display: "flex", alignItems: "center", justifyContent: "center", gap: 9 };
+const btnGhost = { width: "100%", padding: "16px", borderRadius: 17, border: "1.5px solid var(--line2)", cursor: "pointer", background: "var(--surface)", color: "var(--text)", fontWeight: 700, fontSize: 15.5, fontFamily: "var(--display)" };
+const sectionTitle = { fontFamily: "var(--display)", fontSize: 18, fontWeight: 800, color: "var(--text)", letterSpacing: "-.02em", margin: "30px 4px 12px" };
 function Sheet({ open, onClose, title, children }) {
     if (!open)
         return null;
     return (React.createElement("div", { onClick: onClose, className: "sk-sheet-ov", style: { position: "fixed", inset: 0, zIndex: 80, background: "rgba(20,24,28,.45)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "fade .2s ease" } },
-        React.createElement("div", { onClick: (e) => e.stopPropagation(), className: "sk-sheet", style: { width: "100%", maxWidth: 480, background: "var(--bg)", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTop: "1px solid var(--line)", padding: "10px 18px 24px", animation: "slideUp .28s cubic-bezier(.2,.9,.2,1)", maxHeight: "86vh", overflowY: "auto" } },
+        React.createElement("div", { onClick: (e) => e.stopPropagation(), className: "sk-sheet", style: { width: "100%", maxWidth: 480, background: "var(--bg)", borderTopLeftRadius: 30, borderTopRightRadius: 30, borderTop: "1px solid var(--line)", padding: "10px 18px 28px", boxShadow: "0 -20px 50px -20px rgba(0,0,0,.35)", animation: "slideUp .28s cubic-bezier(.2,.9,.2,1)", maxHeight: "86vh", overflowY: "auto" } },
             React.createElement("div", { style: { width: 40, height: 4, borderRadius: 99, background: "var(--line2)", margin: "6px auto 14px" } }),
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
                 React.createElement("h3", { style: { margin: 0, fontFamily: "var(--display)", fontSize: 19, fontWeight: 800 } }, title),
@@ -809,23 +809,21 @@ export default function App() {
                 activeTab === "konkur" && can("cennikView") && React.createElement(KonkurencjaView, { materials: materials }),
                 activeTab === "zadania" && React.createElement(Zadania, { zadania, setZadania, users, currentUser, isOwner }),
                 activeTab === "req" && can("requests") && React.createElement(RequestsInbox, { requests, setRequests, mm })),
-            (isOwner || currentUser.role === "operator") && (React.createElement("button", { onClick: () => setIntakeOpen(true), className: "sk-fab", style: { position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", zIndex: 45, ...btnCopper, width: "auto", padding: "14px 22px", borderRadius: 99, whiteSpace: "nowrap" } },
-                React.createElement(Plus, { size: 20, strokeWidth: 3 }),
-                " Nowe przyj\u0119cie")),
-            React.createElement("nav", { style: { position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 40, maxWidth: 480, margin: "0 auto", background: "var(--navbg)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderTop: "1px solid var(--line)", display: "grid", gridTemplateColumns: `repeat(${primaryTabs.length + (moreTabs.length ? 1 : 0)},1fr)`, padding: "8px 4px calc(8px + env(safe-area-inset-bottom))" } },
-                primaryTabs.map((n) => {
-                    const Ic = n.icon;
-                    const on = tabOn(n.id);
-                    return (React.createElement("button", { key: n.id, onClick: () => setTab(n.id), style: { position: "relative", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 0 6px", color: on ? "var(--copper)" : "var(--faint)" } },
-                        on && React.createElement("span", { style: { position: "absolute", top: 0, width: 5, height: 5, borderRadius: 99, background: "var(--copper)", boxShadow: "0 0 8px var(--copper)", animation: "popIn .3s cubic-bezier(.34,1.56,.64,1)" } }),
-                        React.createElement(Ic, { size: 21, strokeWidth: on ? 2.6 : 2, style: { transform: on ? "scale(1.08)" : "none", transition: "transform .25s cubic-bezier(.34,1.56,.64,1)" } }),
-                        React.createElement("span", { style: { fontSize: 12, fontWeight: on ? 700 : 500 } }, n.label)));
-                }),
-                moreTabs.length > 0 && (React.createElement("button", { onClick: () => setMoreOpen(true), style: { position: "relative", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 0 6px", color: moreActive ? "var(--copper)" : "var(--faint)" } },
-                    moreActive && React.createElement("span", { style: { position: "absolute", top: 0, width: 5, height: 5, borderRadius: 99, background: "var(--copper)", boxShadow: "0 0 8px var(--copper)" } }),
-                    React.createElement(MoreHorizontal, { size: 21, strokeWidth: moreActive ? 2.6 : 2, style: { transform: moreActive ? "scale(1.08)" : "none", transition: "transform .25s cubic-bezier(.34,1.56,.64,1)" } }),
-                    React.createElement("span", { style: { fontSize: 12, fontWeight: moreActive ? 700 : 500 } }, isOwner ? "Szef" : "Wi\u0119cej")))),
-            (typeof window !== "undefined" && window.APP_MODE === "local") && React.createElement("button", { onClick: () => setSwitcherOpen(true), className: "sk-switcher", style: { position: "fixed", bottom: 80, left: 12, zIndex: 46, display: "flex", alignItems: "center", gap: 7, padding: "9px 13px", borderRadius: 99, border: "1px solid rgba(124,111,155,.5)", background: "rgba(124,111,155,.18)", backdropFilter: "blur(8px)", color: "#9b8fc0", fontSize: 13.5, fontWeight: 800, cursor: "pointer" } },
+            (() => {
+                const canIn = isOwner || currentUser.role === "operator";
+                const btn = (key, on, Ic, lbl, onClick) => React.createElement("button", { key, onClick, style: { position: "relative", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, minHeight: 58, padding: 0, color: on ? "var(--copper)" : "var(--muted)" } },
+                    React.createElement("span", { style: { display: "grid", placeItems: "center", width: 50, height: 30, borderRadius: 99, background: on ? "var(--copperSoft)" : "transparent", transition: "background .25s ease" } },
+                        React.createElement(Ic, { size: 21, strokeWidth: on ? 2.5 : 2 })),
+                    React.createElement("span", { style: { fontSize: 12, fontWeight: on ? 800 : 600, letterSpacing: "-.01em" } }, lbl));
+                const items = primaryTabs.map((n) => btn(n.id, tabOn(n.id), n.icon, n.label, () => setTab(n.id)));
+                if (moreTabs.length) items.push(btn("more", moreActive, MoreHorizontal, isOwner ? "Szef" : "Wi\u0119cej", () => setMoreOpen(true)));
+                if (canIn) items.splice(Math.min(2, items.length), 0, React.createElement("button", { key: "intake", onClick: () => setIntakeOpen(true), "aria-label": "Nowe przyj\u0119cie", className: "sk-fab", style: { background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: 0, color: "var(--copper)", marginTop: -28 } },
+                    React.createElement("span", { style: { width: 64, height: 64, borderRadius: 22, display: "grid", placeItems: "center", background: "var(--grad)", color: "#fff", boxShadow: "0 14px 26px -8px rgba(180,80,27,.6), 0 0 0 5px var(--bg)", transition: "transform .15s ease" } },
+                        React.createElement(Plus, { size: 30, strokeWidth: 3 })),
+                    React.createElement("span", { style: { fontSize: 12, fontWeight: 800 } }, "Przyj\u0119cie")));
+                return React.createElement("nav", { className: "sk-nav", style: { position: "fixed", bottom: "calc(10px + env(safe-area-inset-bottom))", left: 12, right: 12, zIndex: 40, maxWidth: 456, margin: "0 auto", background: "var(--navbg)", backdropFilter: "blur(22px) saturate(1.6)", WebkitBackdropFilter: "blur(22px) saturate(1.6)", border: "1px solid var(--line)", borderRadius: 26, boxShadow: "0 16px 36px -14px rgba(16,24,40,.35)", display: "grid", gridTemplateColumns: `repeat(${items.length},1fr)`, alignItems: "end", padding: "6px 4px" } }, items);
+            })(),
+            (typeof window !== "undefined" && window.APP_MODE === "local") && React.createElement("button", { onClick: () => setSwitcherOpen(true), className: "sk-switcher", style: { position: "fixed", bottom: 104, left: 12, zIndex: 46, display: "flex", alignItems: "center", gap: 7, padding: "9px 13px", borderRadius: 99, border: "1px solid rgba(124,111,155,.5)", background: "rgba(124,111,155,.18)", backdropFilter: "blur(8px)", color: "#9b8fc0", fontSize: 13.5, fontWeight: 800, cursor: "pointer" } },
                 React.createElement(RefreshCw, { size: 14 }),
                 " ",
                 currentUser ? ROLE_LABEL[currentUser.role] : "Role"),
@@ -945,24 +943,24 @@ function Pulpit({ tx, dispatch, mm, materials, stock, company, setCompany, openI
                 React.createElement(Sparkles, { size: 17 }),
                 " Za\u0142aduj dane pokazowe"),
             React.createElement("div", { style: { fontSize: 12.5, color: "var(--faint)", marginTop: 9, textAlign: "center" } }, "Wyczy\u015Bcisz je p\u00F3\u017Aniej w Ustawieniach (z\u0119batka u g\u00F3ry)."))),
-        React.createElement(Card, { style: { marginTop: 18, background: "linear-gradient(150deg,#2b3440,#1f262f)", border: "none", color: "#fff" } },
+        React.createElement(Card, { style: { marginTop: 18, background: "radial-gradient(420px 220px at 100% 0%, rgba(255,255,255,.22), transparent 60%), var(--grad)", border: "none", color: "#fff", boxShadow: "0 22px 44px -22px rgba(156,69,24,.75)", padding: 20 } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
                 React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 14, color: "#aeb7c2", fontWeight: 600 } }, "Wyp\u0142acono dzi\u015B (skup)"),
-                    React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 34, letterSpacing: "-.02em", marginTop: 4 } }, plnShort(paid))),
+                    React.createElement("div", { style: { fontSize: 14, color: "rgba(255,255,255,.82)", fontWeight: 600 } }, "Wyp\u0142acono dzi\u015B (skup)"),
+                    React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 38, letterSpacing: "-.03em", marginTop: 4 } }, plnShort(paid))),
                 React.createElement("div", { style: { textAlign: "right" } },
-                    React.createElement("div", { style: { fontSize: 13, color: "#aeb7c2" } }, "Got\u00F3wka dzi\u015B"),
-                    React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, color: "#7fd1a3", marginTop: 4 } }, plnShort(cashOut)))),
-            React.createElement("div", { style: { display: "flex", gap: 22, marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.12)" } },
+                    React.createElement("div", { style: { fontSize: 13, color: "rgba(255,255,255,.82)" } }, "Got\u00F3wka dzi\u015B"),
+                    React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, color: "#fff", marginTop: 4 } }, plnShort(cashOut)))),
+            React.createElement("div", { style: { display: "flex", gap: 22, marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.25)" } },
                 React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 13, color: "#aeb7c2" } }, "Przyj\u0119\u0107"),
+                    React.createElement("div", { style: { fontSize: 13, color: "rgba(255,255,255,.82)" } }, "Przyj\u0119\u0107"),
                     React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18 } }, todayList.length)),
                 React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 13, color: "#aeb7c2" } }, "Masa skupiona"),
+                    React.createElement("div", { style: { fontSize: 13, color: "rgba(255,255,255,.82)" } }, "Masa skupiona"),
                     React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18 } }, kg(mass))),
                 React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 13, color: "#aeb7c2" } }, "Warto\u015B\u0107 magazynu"),
-                    React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18, color: "#e6a263" } }, plnShort(magValue))))),
+                    React.createElement("div", { style: { fontSize: 13, color: "rgba(255,255,255,.82)" } }, "Warto\u015B\u0107 magazynu"),
+                    React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18, color: "#FFE6CF" } }, plnShort(magValue))))),
         isOwner && (() => {
             const mk = new Date().toISOString().slice(0, 7);
             const W = calcWynik(tx, dispatch, materials, (k) => k.slice(0, 7) === mk);
@@ -2359,7 +2357,7 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
                     React.createElement(Truck, { size: 18, color: "#3f7d8a" })),
                 React.createElement("div", { style: { flex: 1 } },
                     React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", fontWeight: 600 } }, "Nr rejestracyjny pojazdu"),
-                    React.createElement("input", { value: plate, onChange: (e) => setPlate(e.target.value.toUpperCase()), placeholder: "np. SK 12345", style: { width: "100%", border: "none", outline: "none", background: "transparent", fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, letterSpacing: ".06em", color: "var(--text)", padding: 0, marginTop: 2 } })),
+                    React.createElement("input", { value: plate, onChange: (e) => setPlate(e.target.value.toUpperCase()), placeholder: "np. SK 12345", style: { width: "100%", border: "none", outline: "none", background: "transparent", fontFamily: "var(--code)", fontWeight: 700, fontSize: 18, letterSpacing: ".06em", color: "var(--text)", padding: 0, marginTop: 2 } })),
                 React.createElement("span", { style: { fontSize: 12, color: "var(--faint)", textAlign: "right", maxWidth: 90 } }, "\u0142\u0105czy klienta z wa\u017Ceniem")),
             prevTx && prevUsed !== plateKey && (React.createElement("button", { onClick: fillPrev, style: { width: "100%", marginTop: 8, display: "flex", alignItems: "center", gap: 11, padding: "13px 14px", borderRadius: 14, cursor: "pointer", border: "1.5px solid var(--green)", background: "rgba(34,197,94,.10)", color: "var(--text)", textAlign: "left" } },
                 React.createElement(BadgeCheck, { size: 22, color: "var(--green)" }),
@@ -2425,7 +2423,7 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
             }),
             topMats.length > 0 && (React.createElement("div", { style: { marginBottom: 10 } },
                 React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", fontWeight: 700, marginBottom: 7 } }, "Najcz\u0119\u015Bciej skupowane \u2014 dotknij, aby doda\u0107"),
-                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, topMats.map((m) => React.createElement("button", { key: m.id, onClick: () => addPos(m), style: { minHeight: 52, padding: "8px 12px", borderRadius: 14, border: "1px solid var(--line2)", background: "var(--surface)", cursor: "pointer", textAlign: "left", color: "var(--text)" } },
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 } }, topMats.map((m) => React.createElement("button", { key: m.id, onClick: () => addPos(m), style: { minWidth: 0, minHeight: 52, padding: "8px 12px", borderRadius: 14, border: "1px solid var(--line2)", background: "var(--surface)", cursor: "pointer", textAlign: "left", color: "var(--text)" } },
                     React.createElement("div", { style: { fontSize: 14.5, fontWeight: 700, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, m.n),
                     React.createElement("div", { style: { fontSize: 13, color: "var(--copper)", fontFamily: "var(--mono)", fontWeight: 700, marginTop: 2 } }, (+m.buy).toFixed(2), " z\u0142/kg")))))),
             React.createElement("button", { onClick: () => setPicker(true), style: { ...btnGhost, borderStyle: "dashed", color: "var(--copper)", borderColor: "rgba(200,116,63,.5)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
@@ -5337,13 +5335,16 @@ function ClientCennik({ materials, rises }) {
 const rootBase = { background: "#0f1318", minHeight: "100vh" };
 /* ─────────── styles ─────────── */
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap');
 .sk-root{
   --bg:#0f1318; --surface:#181d26; --surface2:#202732;
   --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.15); --track:rgba(255,255,255,.08);
   --text:#e9edf1; --muted:#8b97a6; --faint:#59636f;
   --copper:#d08249; --green:#22c55e; --amber:#e0a13f; --red:#ef4444;
-  --display:'Archivo',sans-serif; --body:'Hanken Grotesk',sans-serif; --mono:'JetBrains Mono',monospace;
+  --display:'Plus Jakarta Sans',system-ui,sans-serif; --body:'Plus Jakarta Sans',system-ui,sans-serif; --mono:'Plus Jakarta Sans',system-ui,sans-serif; --code:'JetBrains Mono',monospace;
+  --grad:linear-gradient(135deg,#E8894A 0%,#C25E26 55%,#9C4518 100%); --copperSoft:rgba(208,130,73,.16);
+  --field:#202732; --cardBorder:1px solid rgba(255,255,255,.07); --cardShadow:0 1px 2px rgba(0,0,0,.25), 0 14px 34px -20px rgba(0,0,0,.6);
+  font-variant-numeric: tabular-nums;
   font-family:var(--body); color:var(--text);
   background:
     radial-gradient(820px 420px at 100% -6%, rgba(208,130,73,.12), transparent 70%),
@@ -5353,14 +5354,21 @@ const CSS = `
 }
 .sk-root{ --navbg:rgba(15,19,24,.82); }
 .sk-root.sk-light{
-  --bg:#f4f2ee; --surface:#ffffff; --surface2:#ebe8e2;
-  --line:rgba(20,22,26,.10); --line2:rgba(20,22,26,.18); --track:rgba(20,22,26,.08);
-  --text:#15181c; --muted:#4a525b; --faint:#6b737c;
-  --copper:#a8541d; --green:#15803d; --amber:#a16207; --red:#dc2626;
-  --navbg:rgba(255,255,255,.94);
-  background: radial-gradient(820px 420px at 100% -6%, rgba(208,130,73,.10), transparent 70%), var(--bg);
+  --bg:#F5F4F1; --surface:#FFFFFF; --surface2:#EFEDE8; --field:#F2F0EC;
+  --line:rgba(20,22,26,.07); --line2:rgba(20,22,26,.14); --track:rgba(20,22,26,.07);
+  --text:#121418; --muted:#575E66; --faint:#7D848C;
+  --copper:#B4561F; --green:#15803D; --amber:#A16207; --red:#DC2626;
+  --copperSoft:rgba(194,94,38,.11);
+  --navbg:rgba(255,255,255,.88);
+  --cardBorder:1px solid rgba(20,22,26,.05); --cardShadow:0 1px 2px rgba(16,24,40,.04), 0 8px 24px -10px rgba(16,24,40,.12);
+  background: radial-gradient(900px 480px at 110% -10%, rgba(232,137,74,.16), transparent 65%), radial-gradient(700px 400px at -10% 0%, rgba(63,125,138,.08), transparent 65%), var(--bg);
 }
-.sk-root.sk-light .sk-card, .sk-root.sk-light input, .sk-root.sk-light select, .sk-root.sk-light textarea{ box-shadow: 0 1px 2px rgba(20,22,26,.06); }
+.sk-root.sk-light input:focus, .sk-root.sk-light select:focus, .sk-root.sk-light textarea:focus{ background:#fff; }
+.sk-root h1{ letter-spacing:-.03em !important; }
+.sk-root .sk-plate{ font-family:var(--code); }
+.sk-nav button:active{ transform:scale(.92); }
+.sk-fab:active span{ transform:scale(.94); }
+@keyframes skFloat{ 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-2px);} }
 .sk-root.sk-big{ zoom:1.12; }
 /* dokumenty FPO/KPO = biały papier z ciemnym tekstem (lokalne nadpisanie tokenów) */
 .print-target{ --text:#16181c; --muted:#555c63; --faint:#8a9099; --line:rgba(0,0,0,.12); --line2:rgba(0,0,0,.18); --surface:#ffffff; --surface2:#f4f4f2; --track:rgba(0,0,0,.08); color:#16181c; }
