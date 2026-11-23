@@ -1,0 +1,21 @@
+name: Testy SkupOS
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Paczka w repo jest aktualna
+        run: git diff --exit-code skupos.bundle.js || (echo "skupos.bundle.js nieaktualny — uruchom npm run build i dodaj plik" && exit 1)
+      - run: npm test
