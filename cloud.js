@@ -414,12 +414,13 @@ async function przygotujKlienta(prof) {
 const BG = "#111418", SURF = "#1a1f28", SURF2 = "#1f2636", LINE = "#252d3a", LINE2 = "#2a3347";
 const TEXT = "#e8ecf0", MUTED = "#7a8797", FAINT = "#4a5568", COPPER = "#c8743f", RED = "#dc2626", GREEN = "#15a34a";
 const h = React.createElement;
-const inp = { width: "100%", padding: "13px 14px", borderRadius: 12, border: `1px solid ${LINE2}`, background: SURF2, color: TEXT, fontSize: 15, outline: "none", boxSizing: "border-box", fontFamily: "system-ui" };
+const FONT = "'Plus Jakarta Sans',system-ui,-apple-system,sans-serif";
+const inp = { width: "100%", padding: "13px 14px", borderRadius: 12, border: `1px solid ${LINE2}`, background: SURF2, color: TEXT, fontSize: 15, outline: "none", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif" };
 const lbl = { fontSize: 12.5, color: MUTED, fontWeight: 600, display: "block", marginBottom: 7, marginTop: 16 };
-const btn = { width: "100%", padding: "15px", borderRadius: 14, border: "none", cursor: "pointer", background: `linear-gradient(135deg,${COPPER},#a85829)`, color: "#fff", fontWeight: 800, fontSize: 15.5 };
-const btnGhost = { width: "100%", padding: "14px", borderRadius: 14, cursor: "pointer", background: "transparent", border: `1px solid ${LINE2}`, color: MUTED, fontWeight: 600, fontSize: 14, marginTop: 12 };
+const btn = { width: "100%", padding: "15px", borderRadius: 14, border: "none", cursor: "pointer", background: `linear-gradient(135deg,${COPPER},#a85829)`, color: "#fff", fontWeight: 800, fontSize: 15.5, fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif" };
+const btnGhost = { width: "100%", padding: "14px", borderRadius: 14, cursor: "pointer", background: "transparent", border: `1px solid ${LINE2}`, color: MUTED, fontWeight: 600, fontSize: 14, marginTop: 12, fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif" };
 function Shell({ children }) {
-    return React.createElement("div", { style: { background: BG, minHeight: "100vh", color: TEXT, fontFamily: "system-ui,-apple-system,sans-serif", maxWidth: 440, margin: "0 auto", padding: "0 18px 40px" } }, children);
+    return React.createElement("div", { style: { background: BG, minHeight: "100vh", color: TEXT, fontFamily: "'Plus Jakarta Sans',system-ui,-apple-system,sans-serif", maxWidth: 440, margin: "0 auto", padding: "0 18px 40px" } }, children);
 }
 function Logo() {
     return React.createElement("img", { src: "icon-192.png", alt: "SkupOS", width: 72, height: 72, style: { display: "block", margin: "0 auto", borderRadius: 20, boxShadow: "0 12px 30px rgba(200,116,63,.4)" } });
@@ -616,7 +617,7 @@ function ClientAuth({ firmaId, onDone, onSetup, onPending }) {
         h("div", { style: { fontSize: 11, color: FAINT, textAlign: "center", marginTop: 22, lineHeight: 1.6 } }, "Do\u0142\u0105czasz do skupu, kt\u00F3ry wys\u0142a\u0142 Ci link.")
     );
 }
-const ROLE_ZAPR = [["pracownik", "Pracownik wagi"], ["operator", "Kierownik"], ["kierowca", "Kierowca"], ["accountant", "Ksi\u0119gowy"]];
+const ROLE_ZAPR = [["pracownik", "Pracownik wagi", "Przyj\u0119cia i kwity"], ["operator", "Kierownik", "Przyj\u0119cia, ceny, magazyn"], ["kierowca", "Kierowca", "Swoje odbiory i trasy"], ["accountant", "Ksi\u0119gowy", "Papiery, BDO, eksport"]];
 function InviteButton({ firmaId }) {
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState("pracownik");
@@ -649,24 +650,35 @@ function InviteButton({ firmaId }) {
         setBusy(false);
     };
     if (!open) return null;
-    const tabBtn = (k, l) => h("button", { onClick: () => setTab(k), style: { flex: 1, padding: "11px 8px", borderRadius: 11, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 14, background: tab === k ? COPPER : "transparent", color: tab === k ? "#fff" : MUTED } }, l);
-    return h("div", { onClick: () => setOpen(false), style: { position: "fixed", inset: 0, zIndex: 120, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "auto" } },
-        h("div", { onClick: (e) => e.stopPropagation(), style: { background: SURF, color: TEXT, width: "100%", maxWidth: 440, borderRadius: "20px 20px 0 0", padding: "22px 18px calc(24px + env(safe-area-inset-bottom))", border: "1px solid " + LINE } },
-            h("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 12 } }, "Zapro\u015B do skupu"),
-            h("div", { style: { display: "flex", gap: 4, padding: 4, borderRadius: 14, background: SURF2, marginBottom: 16 } }, tabBtn("pracownik", "Pracownik"), tabBtn("klient", "Klient")),
+    let light = true; try { light = (localStorage.getItem("sk_theme") || "light") === "light"; } catch (e) { }
+    const P = light ? { bg: "#ffffff", s2: "#f4f2ee", line: "#e6e2db", text: "#16191d", mut: "#5f6670" } : { bg: SURF, s2: SURF2, line: LINE2, text: TEXT, mut: MUTED };
+    const desk = typeof matchMedia === "function" && matchMedia("(min-width: 760px)").matches;
+    const tabBtn = (k, l) => h("button", { onClick: () => setTab(k), style: { flex: 1, minHeight: 42, borderRadius: 10, border: "none", cursor: "pointer", fontFamily: FONT, fontWeight: 800, fontSize: 14, background: tab === k ? P.bg : "transparent", color: tab === k ? COPPER : P.mut, boxShadow: tab === k ? "0 1px 3px rgba(0,0,0,.12)" : "none" } }, l);
+    const gBtn = Object.assign({}, btn, { fontFamily: FONT, minHeight: 50, padding: "0 16px", borderRadius: 12, fontSize: 15 });
+    return h("div", { onClick: () => setOpen(false), style: { position: "fixed", inset: 0, zIndex: 120, background: "rgba(10,13,17,.55)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: desk ? "center" : "flex-end", justifyContent: "center", padding: desk ? 24 : 0, fontFamily: FONT } },
+        h("div", { onClick: (e) => e.stopPropagation(), style: { background: P.bg, color: P.text, width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto", borderRadius: desk ? 20 : "22px 22px 0 0", padding: "20px 20px calc(20px + env(safe-area-inset-bottom))", border: "1px solid " + P.line, boxShadow: "0 24px 60px -20px rgba(0,0,0,.45)" } },
+            h("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 } },
+                h("div", { style: { width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "rgba(200,116,63,.14)", color: COPPER, fontSize: 20, fontWeight: 800 } }, "+"),
+                h("div", { style: { flex: 1 } },
+                    h("div", { style: { fontSize: 18, fontWeight: 800, letterSpacing: "-.01em" } }, "Zaproś do skupu"),
+                    h("div", { style: { fontSize: 13, color: P.mut } }, tab === "pracownik" ? "Konto dla pracownika z wybraną rolą" : "Dostęp do Twojego cennika dla dostawcy")),
+                h("button", { onClick: () => setOpen(false), "aria-label": "Zamknij", style: { width: 38, height: 38, borderRadius: 10, border: "1px solid " + P.line, background: P.s2, color: P.mut, cursor: "pointer", fontSize: 18, lineHeight: 1, fontFamily: FONT } }, "×")),
+            h("div", { style: { display: "flex", gap: 4, padding: 4, borderRadius: 13, background: P.s2, marginBottom: 16 } }, tabBtn("pracownik", "Pracownik"), tabBtn("klient", "Klient")),
             tab === "pracownik" ? h(React.Fragment, null,
-                h("div", { style: { fontSize: 14, color: MUTED, lineHeight: 1.5, marginBottom: 12 } }, "Wybierz rol\u0119 i wygeneruj kod. Pracownik otwiera link, zak\u0142ada konto i od razu widzi tylko to, co pozwala jego rola. Kod dzia\u0142a 7 dni i jeden raz."),
-                h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 } }, ROLE_ZAPR.map(([k, l]) => h("button", { key: k, onClick: () => { setRola(k); setKod(""); }, style: { minHeight: 46, borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 14, border: rola === k ? "2px solid " + COPPER : "1px solid " + LINE2, background: rola === k ? "rgba(200,116,63,.14)" : SURF2, color: rola === k ? COPPER : TEXT } }, l))),
+                h("div", { style: { fontSize: 13, fontWeight: 700, color: P.mut, marginBottom: 8 } }, "Rola"),
+                h("div", { style: { display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, marginBottom: 14 } }, ROLE_ZAPR.map(([k, l, d]) => h("button", { key: k, onClick: () => { setRola(k); setKod(""); }, style: { textAlign: "left", padding: "10px 12px", minHeight: 58, borderRadius: 12, cursor: "pointer", fontFamily: FONT, border: rola === k ? "2px solid " + COPPER : "1px solid " + P.line, background: rola === k ? "rgba(200,116,63,.10)" : P.s2, color: P.text } },
+                    h("div", { style: { fontWeight: 800, fontSize: 14, color: rola === k ? COPPER : P.text } }, l),
+                    h("div", { style: { fontSize: 12.5, color: P.mut, marginTop: 2 } }, d)))),
                 kod ? h(React.Fragment, null,
-                    h("div", { style: { textAlign: "center", fontFamily: "monospace", fontSize: 30, fontWeight: 800, letterSpacing: ".14em", padding: "14px 0", borderRadius: 14, background: SURF2, border: "1px solid " + LINE2 } }, kod),
-                    h("button", { onClick: () => copy(linkKod, "kod"), style: Object.assign({}, btn, { marginTop: 12, background: copied === "kod" ? GREEN : btn.background }) }, copied === "kod" ? "Skopiowano \u2713" : "Kopiuj link z kodem")) :
-                    h("button", { onClick: nowyKod, disabled: busy, style: Object.assign({}, btn, { opacity: busy ? .6 : 1 }) }, busy ? "Generuj\u0119\u2026" : "Wygeneruj kod"),
+                    h("div", { style: { textAlign: "center", fontFamily: "'JetBrains Mono',monospace", fontSize: 28, fontWeight: 700, letterSpacing: ".14em", padding: "14px 0", borderRadius: 12, background: P.s2, border: "1px dashed " + COPPER, color: P.text } }, kod),
+                    h("button", { onClick: () => copy(linkKod, "kod"), style: Object.assign({}, gBtn, { marginTop: 10, background: copied === "kod" ? GREEN : gBtn.background }) }, copied === "kod" ? "Skopiowano ✓" : "Kopiuj link z kodem")) :
+                    h("button", { onClick: nowyKod, disabled: busy, style: Object.assign({}, gBtn, { opacity: busy ? .6 : 1 }) }, busy ? "Generuję…" : "Wygeneruj kod"),
+                h("div", { style: { fontSize: 12.5, color: P.mut, lineHeight: 1.5, marginTop: 10 } }, "Pracownik otwiera link, zakłada konto i widzi tylko to, na co pozwala rola. Kod działa 7 dni, jeden raz."),
                 err && h("div", { style: { color: RED, fontSize: 13, fontWeight: 600, marginTop: 10 } }, err)) :
             h(React.Fragment, null,
-                h("div", { style: { fontSize: 14, color: MUTED, lineHeight: 1.5, marginBottom: 14 } }, "Poka\u017C dostawcy kod QR lub wy\u015Blij link. Zobaczy Tw\u00F3j cennik i wy\u015Ble zdj\u0119cie z\u0142omu do wyceny. Nie zobaczy przyj\u0119\u0107 ani innych klient\u00F3w."),
-                qr ? h("div", { style: { display: "flex", justifyContent: "center", marginBottom: 14 } }, h("img", { src: qr, alt: "QR", style: { width: 220, height: 220, borderRadius: 14, background: "#fff", padding: 10 } })) : h("div", { style: { textAlign: "center", color: FAINT, fontSize: 13, padding: "30px 0" } }, "Generuj\u0119 kod QR\u2026"),
-                h("button", { onClick: () => copy(link, "kl"), style: Object.assign({}, btn, { background: copied === "kl" ? GREEN : btn.background }) }, copied === "kl" ? "Skopiowano \u2713" : "Kopiuj link dla klienta")),
-            h("button", { onClick: () => setOpen(false), style: btnGhost }, "Zamknij")));
+                qr ? h("div", { style: { display: "flex", justifyContent: "center", marginBottom: 14 } }, h("img", { src: qr, alt: "Kod QR do cennika", style: { width: 200, height: 200, borderRadius: 14, background: "#fff", padding: 10, border: "1px solid " + P.line } })) : h("div", { style: { textAlign: "center", color: P.mut, fontSize: 13, padding: "30px 0" } }, "Generuję kod QR…"),
+                h("button", { onClick: () => copy(link, "kl"), style: Object.assign({}, gBtn, { background: copied === "kl" ? GREEN : gBtn.background }) }, copied === "kl" ? "Skopiowano ✓" : "Kopiuj link dla klienta"),
+                h("div", { style: { fontSize: 12.5, color: P.mut, lineHeight: 1.5, marginTop: 10 } }, "Dostawca zobaczy Twój cennik i wyśle zdjęcie złomu do wyceny. Nie zobaczy przyjęć ani innych klientów."))));
 }
 function ConfirmScreen({ email, onBack }) {
     return h(Shell, null,
