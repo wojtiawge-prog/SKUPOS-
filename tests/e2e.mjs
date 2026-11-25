@@ -91,6 +91,32 @@ console.log("SkupOS e2e");
   ok("zero błędów JS", errs.length === 0, errs.join(" | "));
   await ctx.close();
 }
+{ // 333: ważenie brutto / tara — netto liczy się samo i trafia do przyjęcia
+  const { ctx, p, errs } = await fresh();
+  await p.getByRole("button", { name: "Nowe przyjęcie" }).click(); await p.waitForTimeout(500);
+  await p.getByPlaceholder("Imię").fill("Jan"); await p.getByPlaceholder("Nazwisko").fill("Nowak");
+  await p.getByPlaceholder("Adres zamieszkania (wymagany)").fill("ul. Leśna 2, 00-001 Wieś");
+  await p.getByPlaceholder("Nr dowodu").fill("ABC123456");
+  await p.locator("button").filter({ hasText: /Dodaj pozycję z cennika/ }).click(); await p.waitForTimeout(400);
+  await p.locator("button").filter({ hasText: /\d zł$/ }).first().click(); await p.waitForTimeout(300);
+  await p.getByRole("button", { name: "brutto / tara" }).click(); await p.waitForTimeout(200);
+  const ins = p.locator("input[type=number]"); // [cena, brutto, tara]
+  await ins.nth(1).fill("3100"); await ins.nth(2).fill("1860"); await p.waitForTimeout(200);
+  const netto = await p.getByText(/1\s?240 kg/).first().isVisible().catch(() => false);
+  ok("brutto/tara: netto 1240 kg policzone", netto);
+  await ins.nth(2).fill("3200"); await p.waitForTimeout(200);
+  const warn = await p.getByText(/tara .* nie może być większa/).first().isVisible().catch(() => false);
+  ok("brutto/tara: ostrzeżenie gdy tara > brutto", warn);
+  await ins.nth(2).fill("1860");
+  await p.getByRole("button", { name: "Własne gospodarstwo domowe" }).click();
+  await p.evaluate(() => [...document.querySelectorAll("input[type=checkbox]")].forEach((x) => { if (!x.checked) x.click(); }));
+  await p.locator("button").filter({ hasText: /Zapisz i wystaw|wypłać/ }).last().click(); await p.waitForTimeout(1200);
+  const t = await p.evaluate(() => JSON.parse(localStorage.getItem("sk_tx_v2") || "[]")[0]);
+  const q = t && t.pos && t.pos[0];
+  ok("brutto/tara: zapis masa=netto + brutto i tara", q && q.w === 1240 && q.brutto === 3100 && q.tara === 1860, JSON.stringify(q || null));
+  ok("brutto/tara: zero błędów JS", errs.length === 0, errs.join(" | "));
+  await ctx.close();
+}
 { // 3. Eksport CSV i kopia
   const { ctx, p } = await fresh();
   await p.locator("nav button", { hasText: "Szef" }).click(); await p.waitForTimeout(300);

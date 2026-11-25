@@ -19,7 +19,7 @@ export const klientToRow = (t, firma_id) => t.firma
 
 export const txToRows = (t, firma_id, klient_id, matIdByApp) => ({
   tx: { firma_id, app_id: t.id, nr: t.no || null, rodzaj: t.kind === "KPO" ? "KPO" : "FPO", klient_id, rejestracja: t.plate || null, platnosc: ["gotowka", "przelew", "blik"].includes(t.payment) ? t.payment : "gotowka", pochodzenie: t.zrodlo || null, produkt: t.produkt || null, uwagi: t.uwagi || null, oswiadczenie: !!(t.osw || t.kind === "KPO"), suma: r2((t.pos || []).reduce((a, p) => a + p.w * p.price, 0)), masa: r1((t.pos || []).reduce((a, p) => a + (+p.w || 0), 0)), created_at: new Date(t.ts).toISOString() },
-  pozycje: (t.pos || []).filter((p) => +p.w > 0).map((p) => ({ firma_id, towar_id: matIdByApp[p.matId] || null, nazwa: p.n, masa: r1(p.w), cena: r2(p.price) })),
+  pozycje: (t.pos || []).filter((p) => +p.w > 0).map((p) => ({ firma_id, towar_id: matIdByApp[p.matId] || null, nazwa: p.n, masa: r1(p.w), cena: r2(p.price), ...(+p.brutto > 0 ? { brutto: r1(p.brutto), tara: r1(p.tara || 0) } : {}) })),
 });
 
 export const dispToRow = (d, firma_id, matIdByApp) => ({ firma_id, app_id: d.id, towar_id: matIdByApp[d.matId] || null, masa: r1(d.w), cena: d.price != null ? r2(d.price) : null, odbiorca: d.contractor || null, data: d.dateKey || new Date(d.ts).toISOString().slice(0, 10) });
@@ -33,7 +33,7 @@ export const rowsToTx = (txRows, pozRows, klienci, appIdByMatId, grupaByMatId = 
     const k = kl[t.klient_id] || {};
     const base = { id: t.app_id || t.id, no: t.nr, ts: Date.parse(t.created_at), kind: t.rodzaj, payment: t.platnosc, plate: t.rejestracja || "", zrodlo: t.pochodzenie || "", _dbId: t.id,
       ...(t.produkt ? { produkt: t.produkt } : {}), ...(t.uwagi ? { uwagi: t.uwagi } : {}),
-      pos: (byTx[t.id] || []).map((p) => ({ matId: appIdByMatId[p.towar_id] || p.towar_id, n: p.nazwa, g: grupaByMatId[p.towar_id] || "FE", w: +p.masa, price: +p.cena })) };
+      pos: (byTx[t.id] || []).map((p) => ({ matId: appIdByMatId[p.towar_id] || p.towar_id, n: p.nazwa, g: grupaByMatId[p.towar_id] || "FE", w: +p.masa, price: +p.cena, ...(p.brutto != null ? { brutto: +p.brutto, tara: +(p.tara || 0) } : {}) })) };
     if (t.rodzaj === "KPO") base.firma = { nazwa: k.nazwa || "", nip: k.nip || "" };
     else base.osoba = { imie: k.imie || "", nazwisko: k.nazwisko || "", adres: k.adres || "", dowod: k.dowod_nr || "" };
     return base;

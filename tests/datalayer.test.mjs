@@ -26,4 +26,11 @@ assert.equal(back3.pos[0].g, "CU"); assert.equal(back3.produkt, "Rury i rynny");
 const d = { id: "d1", matId: "m_fe1", w: 900, contractor: "Cognor", dateKey: "2026-11-22", ts: Date.parse("2026-11-22T12:00:00Z") };
 const dr = rowToDisp({ ...dispToRow(d, F, mm), id: "w1", created_at: "2026-11-22T12:00:00Z" }, back);
 assert.deepEqual({ id: dr.id, matId: dr.matId, w: dr.w, contractor: dr.contractor, dateKey: dr.dateKey }, { id: "d1", matId: "m_fe1", w: 900, contractor: "Cognor", dateKey: "2026-11-22" });
-console.log("datalayer: mapowanie w obie strony OK (cennik, klienci, przyjęcia z pozycjami, grupa towaru, produkt/uwagi FPO, wydania)");
+// 333: ważenie brutto/tara — masa = netto, brutto i tara przechodzą w obie strony; pozycja bez brutto nie dostaje kolumn
+const t4 = { id: "t4", no: "FPO/2026/11/0003", ts: Date.parse("2026-11-23T08:00:00Z"), kind: "FPO", payment: "gotowka", plate: "", osoba: { imie: "A", nazwisko: "B", adres: "C", dowod: "D1" }, pos: [{ matId: "m_fe1", n: "Stal", w: 1240, price: 1.2, brutto: 3100, tara: 1860 }, { matId: "m_cu1", n: "Miedź 1A", w: 3, price: 30.5 }] };
+const r4 = txToRows(t4, F, "k8", mm);
+assert.equal(r4.pozycje[0].masa, 1240); assert.equal(r4.pozycje[0].brutto, 3100); assert.equal(r4.pozycje[0].tara, 1860);
+assert.equal("brutto" in r4.pozycje[1], false);
+const back4 = rowsToTx([{ ...r4.tx, id: "x8" }], r4.pozycje.map((p) => ({ ...p, transakcja_id: "x8" })), [{ id: "k8", typ: "osoba" }], back)[0];
+assert.equal(back4.pos[0].brutto, 3100); assert.equal(back4.pos[0].tara, 1860); assert.equal(back4.pos[1].brutto, undefined);
+console.log("datalayer: mapowanie w obie strony OK (cennik, klienci, przyjęcia z pozycjami, grupa towaru, produkt/uwagi FPO, wydania, brutto/tara)");

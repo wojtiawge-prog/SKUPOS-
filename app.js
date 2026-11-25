@@ -2407,6 +2407,8 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
                 if (od > 0.4)
                     o.push(`${p.n}: cena ${cena.toFixed(2)} zł/kg mocno odbiega od cennika (${m.buy.toFixed(2)} zł/kg) — sprawdź literówkę.`);
             }
+            if (p.bt && numI(p.tara) > 0 && numI(p.tara) >= numI(p.brutto))
+                o.push(`${p.n}: tara (${kg(numI(p.tara))}) nie może być większa ani równa brutto (${kg(numI(p.brutto))}).`);
             if (waga > 30000)
                 o.push(`${p.n}: masa ${kg(waga)} nietypowo duża dla jednej pozycji — upewnij się, że to nie błąd.`);
         });
@@ -2446,7 +2448,7 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
             setErr("Uzupełnij nazwę firmy i NIP.");
             return;
         }
-        const data = { kind, payment, plate: plate.trim().toUpperCase(), pos: pos.map(({ rid, ...r }) => ({ ...r, w: numI(r.w), price: numI(r.price) })), ...(photo ? { photo } : {}), ...(kind === "FPO" ? { osoba, zrodlo: zrodlo.trim(), osw: true, ...(produkt.trim() ? { produkt: produkt.trim() } : {}), ...(uwagi.trim() ? { uwagi: uwagi.trim() } : {}) } : { firma }) };
+        const data = { kind, payment, plate: plate.trim().toUpperCase(), pos: pos.map(({ rid, bt, brutto, tara, ...r }) => ({ ...r, w: numI(r.w), price: numI(r.price), ...(bt && numI(brutto) > 0 ? { brutto: numI(brutto), tara: numI(tara) } : {}) })), ...(photo ? { photo } : {}), ...(kind === "FPO" ? { osoba, zrodlo: zrodlo.trim(), osw: true, ...(produkt.trim() ? { produkt: produkt.trim() } : {}), ...(uwagi.trim() ? { uwagi: uwagi.trim() } : {}) } : { firma }) };
         const t = commitIntake(data);
         setResult(t);
     };
@@ -2534,12 +2536,22 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
                             React.createElement(Trash2, { size: 16 }))),
                     React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "flex-end" } },
                         React.createElement("div", { style: { flex: 1.3 } },
-                            React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)", marginBottom: 4 } }, "Masa (kg)"),
-                            React.createElement("div", { style: { display: "flex", gap: 6 } },
+                            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, color: "var(--muted)", marginBottom: 4 } },
+                                React.createElement("span", null, p.bt ? "Netto (kg)" : "Masa (kg)"),
+                                React.createElement("button", { onClick: () => upd(p.rid, p.bt ? { bt: false, brutto: "", tara: "" } : { bt: true, brutto: p.w || "", tara: "" }), style: { background: "none", border: "none", color: "var(--copper)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", padding: "0 2px", minHeight: 24 } }, p.bt ? "tylko masa" : "brutto / tara")),
+                            p.bt ? React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 800, fontSize: 17, padding: "11px 12px", borderRadius: 10, background: "var(--track)", color: numI(p.tara) > numI(p.brutto) ? "var(--red)" : "var(--text)" } }, kg(numI(p.w)))
+                                : React.createElement("div", { style: { display: "flex", gap: 6 } },
                                 React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, padding: "11px 12px" }, type: "number", inputMode: "decimal", value: p.w || "", placeholder: "0", autoFocus: true, onChange: (e) => upd(p.rid, { w: e.target.value }) }))),
                         React.createElement("div", { style: { flex: 1 } },
                             React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)", marginBottom: 4 } }, "Cena z\u0142/kg"),
                             React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, padding: "11px 12px" }, type: "number", inputMode: "decimal", value: p.price, placeholder: "0", onChange: (e) => upd(p.rid, { price: e.target.value }) }))),
+                    p.bt && React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10 } },
+                        React.createElement("div", { style: { flex: 1 } },
+                            React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)", marginBottom: 4 } }, "Brutto (kg)"),
+                            React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, padding: "11px 12px" }, type: "number", inputMode: "decimal", value: p.brutto, placeholder: "0", autoFocus: true, onChange: (e) => upd(p.rid, { brutto: e.target.value, w: Math.max(0, numI(e.target.value) - numI(p.tara)) }) })),
+                        React.createElement("div", { style: { flex: 1 } },
+                            React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)", marginBottom: 4 } }, "Tara (kg)"),
+                            React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, padding: "11px 12px" }, type: "number", inputMode: "decimal", value: p.tara, placeholder: "0", onChange: (e) => upd(p.rid, { tara: e.target.value, w: Math.max(0, numI(p.brutto) - numI(e.target.value)) }) }))),
                     React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 11, paddingTop: 10, borderTop: "1px solid var(--line)" } },
                         React.createElement("span", { style: { fontSize: 13.5, color: "var(--muted)" } }, "Warto\u015B\u0107 pozycji"),
                         React.createElement("span", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 16, color: "var(--copper)" } }, pln(p.w * p.price)))));
