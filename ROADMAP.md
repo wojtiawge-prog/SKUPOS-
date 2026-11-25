@@ -12,6 +12,23 @@ każda zmiana = build (`npm run build`) + testy + commit + sprawozdanie.
 - [~] 222 — baza SKUPOS-prod wdrożona (0001–0003, agent-ai), test ról na prawdziwej bazie OK, aplikacja przepięta (tryb `?tryb=chmura`), zaproszenia pracowników kodem. Zostało: pierwsze konto właściciela (test na żywo), własny SMTP (Resend), Sentry, kopie zapasowe/PITR, środowisko testowe, „wdrażamy” = chmura domyślnie
 - [ ] Ruch właściciela: nowy projekt Supabase (Frankfurt) → „baza gotowa”; klucz AI w Secrets; Cloudflare Pages; repo prywatne
 
+## Plan 333 → start testów 15.01.2027 (rozpiska z 25.11)
+Decyzja 25.11: bez sprzedaży do gotowej wersji; 3–5 skupów jako partnerzy testowi od połowy stycznia.
+Prace na gałęzi `etap-333`, do main dopiero po „wdrażamy”.
+
+| Termin | Zakres | Stan |
+|---|---|---|
+| 25.11 | Przyjęcie: brutto/tara/netto + migracja 0005 (ADD COLUMN) | [x] na gałęzi, migracja NIEwdrożona |
+| 26.11–6.12 | Zdjęcia przy przyjęciu (aparat → bucket `dowody`), karta klienta (historia, sumy, dane, blokada) + Biała lista po NIP | [ ] |
+| 7.12–11.12 | Kasa KP/KW: tabela kasy, dokumenty KP/KW, stan kasy, raport dzienny | [ ] |
+| 12.12–15.12 | Szablony wyglądu wg DESIGN.md (Wojciech na wyjeździe) | [ ] |
+| 16.12–23.12 | Magazyn na żywo + inwentaryzacja (różnice) + kontenery (gdzie stoją, co w nich) | [ ] |
+| 27.12–5.01 | Offline: kolejka zapisów w IndexedDB, synchronizacja po powrocie sieci, test na telefonie | [ ] |
+| 6.01–12.01 | Poprawki, „wdrażamy”, umowy z testerami | [ ] |
+| 15.01 | Start testów u 3–5 skupów | [ ] |
+
+Ruchy właściciela (blokują): test FPO na `?tryb=chmura` (222) · konto Resend + DNS skupos.pl · konto Sentry · klucz GUS BIR (darmowy, rejestracja w GUS) do danych firmy po NIP · „wdrażamy” dla migracji 0005 · umowa powierzenia RODO u prawnika · forma firmy z księgowym.
+
 ## Komendy
 | Komenda | Zakres |
 |---|---|
