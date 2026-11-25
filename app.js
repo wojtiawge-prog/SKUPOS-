@@ -5653,11 +5653,23 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   .sk-root nav { position: fixed !important; top: 0 !important; bottom: 0 !important; left: 0 !important; right: auto !important; width: 236px !important; max-width: 236px !important; display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 4px !important; padding: 22px 12px !important; border-top: none !important; border-right: 1px solid var(--line); background: rgba(13,16,20,.92) !important; overflow-y: auto; }
   .sk-root nav::before { content: "SkupOS"; display: block; font-family: var(--display); font-weight: 900; font-size: 21px; letter-spacing: .4px; color: var(--copper); padding: 2px 12px 18px; }
   .sk-root nav button { flex-direction: row !important; justify-content: flex-start !important; gap: 13px !important; padding: 12px 14px !important; border-radius: 12px !important; }
-  .sk-root nav button:hover { background: rgba(255,255,255,.05) !important; }
+  .sk-root nav button:hover { background: rgba(255,255,255,.05) !important; color: #e6e8eb !important; }
   .sk-root nav button span { font-size: 13.5px !important; }
 
-  /* FAB i przełącznik: do prawego / lewego dołu obszaru treści */
-  .sk-fab { left: auto !important; right: 36px !important; bottom: 36px !important; transform: none !important; box-shadow: 0 16px 40px -12px rgba(200,116,63,.55); }
+  /* sidebar v2: główny przycisk pod logo, równe pozycje, aktywna = pasek z lewej */
+  .sk-root nav::before { order: -2; }
+  .sk-root nav { border-radius: 0 !important; box-shadow: none !important; border-left: none !important; border-top: none !important; border-bottom: none !important; margin: 0 !important; }
+  .sk-root nav button { min-height: 44px !important; color: #9aa1ab !important; position: relative; }
+  .sk-root nav button > span:first-child { width: 24px !important; height: 24px !important; background: transparent !important; border-radius: 0 !important; }
+  .sk-root nav button > span:last-child { font-size: 14px !important; font-weight: 600 !important; }
+  .sk-root nav button[style*="var(--copper)"]:not(.sk-fab) { color: #fff !important; background: rgba(255,255,255,.07) !important; box-shadow: inset 3px 0 0 var(--copper); border-radius: 4px 12px 12px 4px !important; }
+  .sk-root nav button[style*="var(--copper)"]:not(.sk-fab) > span:first-child { color: var(--copper) !important; }
+  .sk-root nav .sk-fab { order: -1; margin: 0 0 16px !important; padding: 12px 14px !important; background: var(--grad) !important; color: #fff !important; box-shadow: 0 6px 16px -8px rgba(180,80,27,.6) !important; animation: none !important; }
+  .sk-root nav .sk-fab > span:first-child { width: 24px !important; height: 24px !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
+  .sk-root nav .sk-fab > span:first-child svg { width: 20px; height: 20px; }
+  .sk-root nav .sk-fab > span:last-child { font-size: 0 !important; }
+  .sk-root nav .sk-fab > span:last-child::after { content: "Nowe przyjęcie"; font-size: 14px; font-weight: 800; }
+  .sk-root nav .sk-fab:hover { filter: brightness(1.08); background: var(--grad) !important; }
   .sk-switcher { left: 260px !important; bottom: 28px !important; }
 
   /* arkusze: wycentrowany modal zamiast bottom-sheet */
