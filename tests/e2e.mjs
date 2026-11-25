@@ -36,7 +36,7 @@ console.log("SkupOS e2e");
   ok("karta 'Ten miesiąc — ile zarabiam'", await p.getByText("Ten miesiąc — ile zarabiam").isVisible());
   for (const it of ["Przyjęcia", "Wynik", "Papiery i podatki", "Zadania", "Zgłoszenia", "Eksport, kopia, dziennik", "Podpowiedzi", "Doradca AI"]) {
     await p.locator("nav button", { hasText: "Szef" }).click(); await p.waitForTimeout(300);
-    await p.locator("button").filter({ hasText: new RegExp("^" + it + "$") }).last().click(); await p.waitForTimeout(500);
+    await p.locator(".sk-kat-item").filter({ hasText: new RegExp("^" + it.replace(/[,]/g, "\\$&") ) }).first().click(); await p.waitForTimeout(500);
   }
   const W = await p.evaluate(() => document.documentElement.scrollWidth);
   ok("nic nie wychodzi poza ekran (390 px)", W <= 391, "szerokość " + W);
@@ -94,7 +94,7 @@ console.log("SkupOS e2e");
 { // 3. Eksport CSV i kopia
   const { ctx, p } = await fresh();
   await p.locator("nav button", { hasText: "Szef" }).click(); await p.waitForTimeout(300);
-  await p.locator("button").filter({ hasText: /^Eksport, kopia, dziennik$/ }).last().click(); await p.waitForTimeout(500);
+  await p.locator(".sk-kat-item").filter({ hasText: /^Eksport, kopia, dziennik/ }).first().click(); await p.waitForTimeout(500);
   const [d1] = await Promise.all([p.waitForEvent("download"), p.getByText("Przyjęcia (każda pozycja)").click()]);
   const csv = fs.readFileSync(await d1.path(), "utf8");
   ok("CSV: BOM + średniki + polskie znaki", csv.charCodeAt(0) === 0xfeff && csv.includes(";") && /Wartość zł/.test(csv));

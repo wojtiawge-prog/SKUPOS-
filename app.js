@@ -886,10 +886,11 @@ const CAT_COLORS = {
     kopia: "#0ea5e9", mag: "#38bdf8", wyw: "#2dd4bf", zadania: "#f472b6", mkt: "#fb923c",
     ksieg: "#818cf8", ai: "#facc15", req: "#34d399", nadzorca: "#f87171", social: "#60a5fa", konkur: "#2dd4bf",
 };
+const CAT_DESC = { tx: "Lista kwitów FPO i KPO", intel: "Marże, ceny, opłacalność", ksieg: "BDO, KPO, eksport dla księgowej", zadania: "Co do zrobienia w zespole", req: "Prośby klientów o wycenę i odbiór", kopia: "Excel, kopia danych, historia zmian", nadzorca: "Anomalie i rzeczy do sprawdzenia", ai: "Zapytaj o ceny, marże, strategię", mag: "Stan i wartość towaru", cennik: "Ceny skupu", wyw: "Odbiory i transport", mkt: "Kampanie i klienci", social: "Posty i media", konkur: "Ceny konkurencji" };
 function KategoriePanel({ nav, activeTab, onPick, onClose, isOwner, theme, setTheme, big, setBig }) {
     useEffect(() => { const k = (e) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
-    return (React.createElement("div", { onClick: onClose, style: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(8,11,15,.62)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "fade .22s ease" } },
-        React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { width: "100%", maxWidth: 480, background: "var(--surface)", borderRadius: "28px 28px 0 0", border: "1px solid var(--line)", borderBottom: "none", padding: "10px 18px calc(26px + env(safe-area-inset-bottom))", boxShadow: "0 -22px 64px -22px rgba(0,0,0,.65)", animation: "sheetUp .44s cubic-bezier(.22,1,.36,1)" } },
+    return (React.createElement("div", { onClick: onClose, className: "sk-kat-ov", style: { position: "fixed", inset: 0, zIndex: 90, background: "rgba(8,11,15,.62)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "flex", alignItems: "flex-end", justifyContent: "center", animation: "fade .22s ease" } },
+        React.createElement("div", { onClick: (e) => e.stopPropagation(), className: "sk-kat", style: { width: "100%", maxWidth: 480, maxHeight: "88vh", overflowY: "auto", overscrollBehavior: "contain", background: "var(--surface)", borderRadius: "28px 28px 0 0", border: "1px solid var(--line)", borderBottom: "none", padding: "10px 18px calc(26px + env(safe-area-inset-bottom))", boxShadow: "0 -22px 64px -22px rgba(0,0,0,.65)", animation: "sheetUp .44s cubic-bezier(.22,1,.36,1)" } },
             React.createElement("div", { style: { width: 42, height: 5, borderRadius: 99, background: "var(--line2)", margin: "0 auto 16px" } }),
             React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, padding: "0 2px" } },
                 React.createElement("div", null,
@@ -897,15 +898,17 @@ function KategoriePanel({ nav, activeTab, onPick, onClose, isOwner, theme, setTh
                     React.createElement("div", { style: { fontSize: 14.5, color: "var(--muted)", marginTop: 1 } }, isOwner ? "Wyniki, papiery, zesp\u00F3\u0142 i ustawienia" : "Pozosta\u0142e sekcje")),
                 React.createElement("button", { onClick: onClose, style: iconBtn },
                     React.createElement(X, { size: 18 }))),
-            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 } }, nav.map((n, i) => {
+            React.createElement("div", { className: "sk-kat-grid", style: { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 } }, nav.map((n, i) => {
                 const Ic = n.icon;
                 const on = activeTab === n.id;
                 const col = CAT_COLORS[n.id] || "var(--copper)";
-                return (React.createElement("button", { key: n.id, onClick: () => { onPick(n.id); onClose(); }, style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "4px 2px", background: "none", border: "none", cursor: "pointer", animation: "rise .42s both", animationDelay: (i * 0.035) + "s" } },
-                    React.createElement("div", { style: { width: 62, height: 62, borderRadius: 20, display: "grid", placeItems: "center", background: on ? (col + "2e") : (col + "15"), border: on ? ("1.5px solid " + col) : "1.5px solid transparent", boxShadow: on ? ("0 10px 26px -8px " + col + "bb") : "none", transition: "background .25s ease, box-shadow .25s ease, border-color .25s ease", position: "relative" } },
-                        React.createElement(Ic, { size: 27, color: col, strokeWidth: 2.2 }),
-                        on && React.createElement("span", { style: { position: "absolute", top: -4, right: -4, width: 14, height: 14, borderRadius: 99, background: col, border: "3px solid var(--surface)", boxShadow: "0 0 10px " + col } })),
-                    React.createElement("span", { style: { fontSize: 14.5, fontWeight: on ? 800 : 600, color: on ? "var(--text)" : "var(--muted)", textAlign: "center", lineHeight: 1.2 } }, n.label)));
+                return (React.createElement("button", { key: n.id, onClick: () => { onPick(n.id); onClose(); }, className: "sk-kat-item", style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", minHeight: 60, textAlign: "left", borderRadius: 14, cursor: "pointer", background: on ? (col + "14") : "var(--surface2)", border: on ? ("1.5px solid " + col) : "1px solid var(--line)", animation: "rise .32s both", animationDelay: (i * 0.025) + "s" } },
+                    React.createElement("div", { style: { width: 40, height: 40, flex: "0 0 40px", borderRadius: 12, display: "grid", placeItems: "center", background: col + "1f" } },
+                        React.createElement(Ic, { size: 20, color: col, strokeWidth: 2.2 })),
+                    React.createElement("div", { style: { minWidth: 0, flex: 1 } },
+                        React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: "var(--text)", lineHeight: 1.2 } }, n.label),
+                        CAT_DESC[n.id] && React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, CAT_DESC[n.id])),
+                    React.createElement(ChevronRight, { size: 16, color: "var(--faint)" })));
             })),
             isOwner && typeof window !== "undefined" && window.__cloudInvite && React.createElement("button", { onClick: () => { onClose(); window.__cloudInvite(); }, style: { marginTop: 18, width: "100%", minHeight: 52, borderRadius: 14, cursor: "pointer", fontSize: 15, fontWeight: 800, border: "1.5px solid var(--copper)", background: "var(--copperSoft)", color: "var(--copper)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } }, React.createElement(Users, { size: 18 }), "Zaproś pracownika lub klienta"),
             setTheme && (React.createElement("div", { style: { marginTop: 22, paddingTop: 16, borderTop: "1px solid var(--line)", display: "grid", gap: 10 } },
@@ -5671,6 +5674,13 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   .sk-root nav .sk-fab > span:last-child::after { content: "Nowe przyjęcie"; font-size: 14px; font-weight: 800; }
   .sk-root nav .sk-fab:hover { filter: brightness(1.08); background: var(--grad) !important; }
   .sk-switcher { left: 260px !important; bottom: 28px !important; }
+
+  /* panel Szef: modal na środku, siatka 2 kolumny */
+  .sk-kat-ov { align-items: center !important; padding: 32px; }
+  .sk-kat { max-width: 760px !important; border-radius: 22px !important; border-bottom: 1px solid var(--line) !important; animation: fade .18s ease !important; padding: 18px 22px 22px !important; }
+  .sk-kat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .sk-kat > div:first-child { display: none; }
+  .sk-kat-item:hover { border-color: var(--line2) !important; filter: none !important; transform: translateY(-1px); }
 
   /* arkusze: wycentrowany modal zamiast bottom-sheet */
   .sk-sheet-ov { align-items: center !important; padding: 32px; }
