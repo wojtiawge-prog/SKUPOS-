@@ -117,6 +117,23 @@ console.log("SkupOS e2e");
   ok("brutto/tara: zero błędów JS", errs.length === 0, errs.join(" | "));
   await ctx.close();
 }
+{ // 333+: do odsprzedaży — zdjęcie, cena skupu, sprzedaż, zysk
+  const { ctx, p, errs } = await fresh();
+  await p.locator("nav button", { hasText: "Magazyn" }).click(); await p.waitForTimeout(400);
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  await p.locator("input[type=file][aria-label='Zdjęcie przedmiotu']").setInputFiles({ name: "lampa.png", mimeType: "image/png", buffer: png }); await p.waitForTimeout(600);
+  ok("odsprzedaż: pozycja dodana ze zdjęcia", await p.getByLabel("Cena skupu").isVisible().catch(() => false));
+  await p.getByLabel("Nazwa przedmiotu").fill("Lampa naftowa mosiężna");
+  await p.getByLabel("Cena skupu").fill("20");
+  await p.getByRole("button", { name: "Sprzedane" }).click(); await p.waitForTimeout(200);
+  await p.getByLabel("Cena sprzedaży").fill("150"); await p.waitForTimeout(300);
+  const zysk = await p.getByText(/Zysk ze sprzedanych/).isVisible().catch(() => false) && await p.getByText(/130,00 zł/).first().isVisible().catch(() => false);
+  ok("odsprzedaż: zysk 130 zł policzony", zysk);
+  const saved = await p.evaluate(() => JSON.parse(localStorage.getItem("sk_resale_v1") || "[]")[0]);
+  ok("odsprzedaż: zapis na urządzeniu", saved && saved.nazwa === "Lampa naftowa mosiężna" && saved.st === "sprzedane", JSON.stringify(saved && { n: saved.nazwa, st: saved.st }));
+  ok("odsprzedaż: zero błędów JS", errs.length === 0, errs.join(" | "));
+  await ctx.close();
+}
 { // 3. Eksport CSV i kopia
   const { ctx, p } = await fresh();
   await p.locator("nav button", { hasText: "Szef" }).click(); await p.waitForTimeout(300);

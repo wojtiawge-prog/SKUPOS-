@@ -2250,6 +2250,89 @@ function KonsolidacjaTransportu({ materials, stock }) {
                 React.createElement("input", { type: "number", value: param[k], onChange: e => upd(k, e.target.value), style: { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line2)", background: "var(--surface2)", color: "var(--text)", fontSize: 15, fontFamily: "var(--mono)", fontWeight: 700, outline: "none", boxSizing: "border-box" } })))),
             React.createElement("div", { style: { fontSize: 13, color: "var(--faint)", lineHeight: 1.5, marginTop: 4 } }, "Parametry zapisuj\u0105 si\u0119 lokalnie. Ustaw raz pod swoje auto i tras\u0119 do huty.")))));
 }
+/* ——— 333+: rzeczy do odsprzedaży (wersja wstępna, dane na tym urządzeniu) ———
+   AI pisze szkic ogłoszenia ze zdjęcia; cenę zatwierdza człowiek po sprawdzeniu ofert na Allegro/OLX. */
+const RESALE_KEY = "sk_resale_v1";
+const resaleLoad = () => { try { return JSON.parse(lsGet(RESALE_KEY) || "[]"); } catch (e) { return []; } };
+const resaleSave = (v) => { try { localStorage.setItem(RESALE_KEY, JSON.stringify(v)); } catch (e) { alert("Brak miejsca na urządzeniu — usuń sprzedane pozycje albo zdjęcia."); } };
+const shrinkPhoto = (file) => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => { const img = new Image(); img.onload = () => { const max = 720, k = Math.min(1, max / Math.max(img.width, img.height)); const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL("image/jpeg", 0.7)); }; img.onerror = rej; img.src = r.result; };
+    r.onerror = rej; r.readAsDataURL(file);
+});
+const RESALE_ST = { nowe: "Do wystawienia", wystawione: "Wystawione", sprzedane: "Sprzedane" };
+function Odsprzedaz() {
+    const [items, setItems] = useState(resaleLoad);
+    const [open, setOpen] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState("");
+    const fileRef = useRef(null);
+    const save = (v) => { setItems(v); resaleSave(v); };
+    const upd = (id, patch) => save(items.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    const cur = items.find((x) => x.id === open) || null;
+    const addPhoto = async (e) => {
+        const f = e.target.files && e.target.files[0]; e.target.value = "";
+        if (!f) return;
+        try { const photo = await shrinkPhoto(f); const it = { id: "r" + Date.now().toString(36), ts: Date.now(), photo, nazwa: "", buy: "", st: "nowe" }; save([it, ...items]); setOpen(it.id); }
+        catch (x) { setErr("Nie udało się wczytać zdjęcia."); }
+    };
+    const draft = async () => {
+        if (!cur) return;
+        setBusy(true); setErr("");
+        try {
+            const sys = "Jesteś doświadczonym sprzedawcą na Allegro i OLX. Na podstawie zdjęcia przedmiotu ze skupu złomu przygotuj szkic ogłoszenia po polsku. Odpowiedz WYŁĄCZNIE poprawnym JSON: {\"tytul\": max 70 znaków, konkretny, z marką/modelem jeśli widoczne, \"opis\": 4-7 zdań: co to jest, stan widoczny na zdjęciu, cechy, uczciwie wady, bez obietnic których nie widać, \"kategoria\": sugerowana kategoria Allegro, \"szukaj\": 3-5 słów do wyszukania podobnych ofert, \"widelki\": {\"od\": liczba zł, \"do\": liczba zł} albo null gdy nie da się ocenić, \"pewnosc\": \"niska\"|\"średnia\"|\"wysoka\", \"uwagi\": ostrzeżenia np. możliwa replika, przedmiot może wymagać zezwolenia, sprawdź oznaczenia}. Widełki to tylko orientacja — nie zgaduj z przesadną pewnością.";
+            const content = [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: cur.photo.split(",")[1] } }, { type: "text", text: "Przedmiot: " + (cur.nazwa || "rozpoznaj ze zdjęcia") + "." }];
+            const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 900, system: sys, messages: [{ role: "user", content }] }) });
+            const data = await res.json();
+            if (data && data.error) throw new Error(data.error.message || "AI niedostępne");
+            const txt = (data.content || []).map((b) => b.text || "").join("");
+            const j = JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1));
+            upd(cur.id, { ai: j, nazwa: cur.nazwa || j.tytul || "" });
+        }
+        catch (x) { setErr("AI nie przygotowało szkicu: " + (x && x.message ? x.message : "spróbuj ponownie")); }
+        finally { setBusy(false); }
+    };
+    const copy = (t) => { try { navigator.clipboard.writeText(t); } catch (e) { } };
+    const n = (v) => parseFloat(String(v).replace(",", ".")) || 0;
+    const sold = items.filter((x) => x.st === "sprzedane");
+    const zysk = sold.reduce((a, x) => a + n(x.sell) - n(x.buy), 0);
+    const q = cur && cur.ai && cur.ai.szukaj ? encodeURIComponent(cur.ai.szukaj) : "";
+    return React.createElement(React.Fragment, null,
+        React.createElement("div", { style: { ...sectionTitle, display: "flex", justifyContent: "space-between", alignItems: "center" } },
+            React.createElement("span", null, "Do odsprzedaży"),
+            React.createElement("button", { onClick: () => fileRef.current && fileRef.current.click(), style: { ...iconBtn, width: "auto", padding: "0 14px", gap: 6, display: "flex", fontSize: 14, fontWeight: 700 } }, React.createElement(Camera, { size: 16 }), " Dodaj")),
+        React.createElement("input", { ref: fileRef, type: "file", accept: "image/*", capture: "environment", onChange: addPhoto, style: { display: "none" }, "aria-label": "Zdjęcie przedmiotu" }),
+        err && React.createElement("div", { style: { color: "var(--red)", fontSize: 13.5, margin: "0 4px 10px" } }, err),
+        sold.length > 0 && React.createElement(Card, { pad: 14, style: { marginBottom: 10 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } },
+                React.createElement("span", { style: { color: "var(--muted)", fontSize: 14 } }, "Zysk ze sprzedanych (", sold.length, ")"),
+                React.createElement("b", { style: { fontFamily: "var(--mono)", color: zysk >= 0 ? "var(--green)" : "var(--red)" } }, pln(zysk)))),
+        items.length === 0 && React.createElement(Card, { pad: 16 }, React.createElement("div", { style: { color: "var(--muted)", fontSize: 14.5, lineHeight: 1.5 } }, "Trafiła się rzecz warta więcej niż złom? Zrób zdjęcie — AI przygotuje szkic ogłoszenia, a Ty sprawdzisz cenę na Allegro i OLX.")),
+        items.map((x) => React.createElement(Card, { key: x.id, pad: 12, style: { marginBottom: 10 }, onClick: () => setOpen(open === x.id ? null : x.id) },
+            React.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center" } },
+                React.createElement("img", { src: x.photo, alt: "", style: { width: 56, height: 56, objectFit: "cover", borderRadius: 12, flexShrink: 0 } }),
+                React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                    React.createElement("div", { style: { fontWeight: 700, fontSize: 15.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, x.nazwa || "Bez nazwy"),
+                    React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", marginTop: 2 } }, RESALE_ST[x.st], x.st === "sprzedane" ? " · zysk " + pln(n(x.sell) - n(x.buy)) : (x.ai && x.ai.widelki ? " · AI: " + x.ai.widelki.od + "–" + x.ai.widelki.do + " zł" : ""))),
+                React.createElement(ChevronRight, { size: 18, color: "var(--muted)" })),
+            open === x.id && React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { marginTop: 12, display: "flex", flexDirection: "column", gap: 10 } },
+                React.createElement("input", { style: inputStyle, value: x.nazwa, placeholder: "Nazwa (opcjonalnie — AI rozpozna)", onChange: (e) => upd(x.id, { nazwa: e.target.value }), "aria-label": "Nazwa przedmiotu" }),
+                React.createElement("input", { style: inputStyle, type: "number", inputMode: "decimal", value: x.buy, placeholder: "Cena skupu (zł)", onChange: (e) => upd(x.id, { buy: e.target.value }), "aria-label": "Cena skupu" }),
+                React.createElement("button", { onClick: draft, disabled: busy, style: { ...btnCopper } }, busy ? "AI pisze szkic…" : (x.ai ? "Przygotuj szkic od nowa (AI)" : "Przygotuj ogłoszenie (AI)")),
+                x.ai && React.createElement("div", { style: { background: "var(--field)", borderRadius: 14, padding: 12, fontSize: 14.5, lineHeight: 1.5, display: "flex", flexDirection: "column", gap: 8 } },
+                    React.createElement("b", null, x.ai.tytul),
+                    React.createElement("div", { style: { whiteSpace: "pre-wrap" } }, x.ai.opis),
+                    React.createElement("div", { style: { color: "var(--muted)", fontSize: 13 } }, "Kategoria: ", x.ai.kategoria || "—"),
+                    React.createElement("div", { style: { fontSize: 13.5 } }, React.createElement("b", null, "Widełki AI (orientacyjne, pewność: ", x.ai.pewnosc || "niska", "): "), x.ai.widelki ? x.ai.widelki.od + "–" + x.ai.widelki.do + " zł" : "AI nie potrafi ocenić — sprawdź oferty"),
+                    x.ai.uwagi && React.createElement("div", { style: { color: "var(--amber)", fontSize: 13.5, fontWeight: 600 } }, "Uwaga: ", x.ai.uwagi),
+                    q && React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+                        React.createElement("a", { href: "https://allegro.pl/listing?string=" + q, target: "_blank", rel: "noopener", style: { fontWeight: 700, fontSize: 14 } }, "Sprawdź ceny na Allegro"),
+                        React.createElement("a", { href: "https://www.olx.pl/oferty/q-" + q + "/", target: "_blank", rel: "noopener", style: { fontWeight: 700, fontSize: 14 } }, "Sprawdź na OLX")),
+                    React.createElement("button", { onClick: () => copy(x.ai.tytul + "\n\n" + x.ai.opis), style: { ...iconBtn, width: "100%", height: 44, fontWeight: 700, fontSize: 14 } }, "Kopiuj tytuł i opis")),
+                React.createElement("div", { style: { display: "flex", gap: 6 } }, Object.keys(RESALE_ST).map((k) => React.createElement("button", { key: k, onClick: () => upd(x.id, { st: k }), style: { flex: 1, minHeight: 44, borderRadius: 12, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: x.st === k ? "var(--copper)" : "var(--field)", color: x.st === k ? "#fff" : "var(--text)" } }, RESALE_ST[k]))),
+                x.st === "sprzedane" && React.createElement("input", { style: inputStyle, type: "number", inputMode: "decimal", value: x.sell || "", placeholder: "Cena sprzedaży (zł)", onChange: (e) => upd(x.id, { sell: e.target.value }), "aria-label": "Cena sprzedaży" }),
+                React.createElement("button", { onClick: () => { if (confirm("Usunąć tę pozycję?")) { save(items.filter((y) => y.id !== x.id)); setOpen(null); } }, style: { background: "none", border: "none", color: "var(--red)", fontWeight: 700, fontSize: 14, cursor: "pointer", minHeight: 44 } }, "Usuń")))));
+}
 function Magazyn({ materials, stock, mm, dispatch, setDispatch }) {
     const [wyd, setWyd] = useState(false);
     const [wMat, setWMat] = useState("");
@@ -2297,6 +2380,7 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch }) {
                     React.createElement("span", { style: { fontFamily: "var(--display)", fontWeight: 700, fontSize: 15 } }, "Potencjalny zysk")),
                 React.createElement("span", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 22, color: "var(--green)" } }, plnShort(profit)))),
         React.createElement(KonsolidacjaTransportu, { materials: materials, stock: stock }),
+        React.createElement(Odsprzedaz, null),
         React.createElement("div", { style: sectionTitle }, "Stany wg materia\u0142u"),
         rows.map((m) => (React.createElement(Card, { key: m.id, pad: 13, style: { marginBottom: 9 } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
