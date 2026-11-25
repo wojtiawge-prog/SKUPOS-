@@ -817,7 +817,7 @@ export default function App() {
             toast && React.createElement(Toast, { msg: toast.msg, onClose: () => setToast(null) }),
             usersOpen && React.createElement(UsersManager, { users: users, setUsers: setUsers, currentUser: currentUser, onClose: () => setUsersOpen(false) }),
             permsOpen && React.createElement(PermsManager, { perms: perms, setPerms: setPerms, onClose: () => setPermsOpen(false) }),
-            React.createElement("div", { key: activeTab, style: { animation: "slideFade .34s cubic-bezier(.22,1,.36,1)" } },
+            React.createElement("div", { key: activeTab, className: "sk-main", style: { animation: "slideFade .34s cubic-bezier(.22,1,.36,1)" } },
                 hasMag && (activeTab === "mag" || activeTab === "wyw") && segBar([["mag", "Stan magazynu"], ["wyw", "Wywozy"]]),
                 (activeTab === "cennik" || activeTab === "konkur") && segBar([["cennik", "M\u00F3j cennik"], ["konkur", "Ceny u konkurencji"]]),
                 activeTab === "home" && currentUser?.role === "kierowca" && React.createElement(KierowcaHome, { pickups: pickups, setPickups: setPickups, currentUser: currentUser }),
@@ -5650,7 +5650,11 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 /* ═══════════ TRYB DESKTOP (>=1024px) — mobile bez zmian ═══════════ */
 @media (min-width: 1024px) {
   /* treść: szeroka kolumna na prawo od sidebara */
-  .sk-root { max-width: 900px !important; margin-left: 264px !important; margin-right: auto !important; padding: 8px 28px 56px !important; }
+  .sk-root { max-width: 1040px !important; margin-left: 264px !important; margin-right: auto !important; padding: 8px 28px 56px !important; }
+  /* gęstszy układ na komputerze: mniej przewijania */
+  .sk-main { zoom: .9; }
+  .sk-main [style*="position: fixed"] { zoom: 1.1111; }
+  .sk-main [style*="position: fixed"] [style*="position: fixed"] { zoom: 1; }
 
   /* nawigacja: dolny pasek -> lewy sidebar */
   .sk-root nav { position: fixed !important; top: 0 !important; bottom: 0 !important; left: 0 !important; right: auto !important; width: 236px !important; max-width: 236px !important; display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 4px !important; padding: 22px 12px !important; border-top: none !important; border-right: 1px solid var(--line); background: rgba(13,16,20,.92) !important; overflow-y: auto; }
