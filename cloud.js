@@ -91,7 +91,10 @@ function syncBanner() {
         el.textContent = (navigator.onLine === false ? "Brak internetu" : "Nie zapisano w chmurze") + " \u2014 " + n + " zmian czeka, pon\u00f3wi\u0119 automatycznie. Nie zamykaj aplikacji.";
     } catch (e) { }
 }
+let _rola = null; // rola zalogowanego: dane firmy i uprawnienia zapisuje tylko właściciel (RLS)
+const TYLKO_WLASCICIEL = ["sk_co_v2", "sk_perms_v2"];
 function pushKey(s, firmaId, k, val) {
+    if (_rola && _rola !== "owner" && TYLKO_WLASCICIEL.indexOf(k) !== -1) { delete _pending[k]; syncBanner(); return; }
     _pending[k] = { firmaId, val };
     try {
         s.from("ustawienia").upsert({ firma_id: firmaId, klucz: k, wartosc: val }, { onConflict: "firma_id,klucz" }).then((r) => {
@@ -294,6 +297,7 @@ async function loguj(email, haslo) {
 }
 // ── Po zalogowaniu: przygotuj stan lokalny, by apka wstała zalogowana ──
 async function przygotuj(prof) {
+    _rola = prof.rola || null;
     await pull(prof.firma_id);
     await pullZgloszenia(prof);
     let users = [];
