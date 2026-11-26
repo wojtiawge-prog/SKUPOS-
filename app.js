@@ -790,7 +790,7 @@ export default function App() {
         ...(can("cennikView") ? [{ id: "cennik", label: "Ceny", icon: Coins }] : []),
         ...(can("magazyn") ? [{ id: "mag", label: "Magazyn", icon: Warehouse }] : []),
         ...(can("transactions") ? [{ id: "tx", label: "Przyj\u0119cia", icon: Receipt }] : []),
-        ...(can("cennikView") ? [{ id: "intel", label: "Wynik", icon: TrendingUp }] : []),
+        ...(isOwner ? [{ id: "intel", label: "Wynik", icon: TrendingUp }] : []),
         ...(can("accounting") ? [{ id: "ksieg", label: "Papiery i podatki", icon: Calculator }] : []),
         { id: "zadania", label: "Zadania", icon: BadgeCheck },
         ...(can("requests") ? [{ id: "req", label: "Zg\u0142oszenia", icon: Inbox }] : []),
@@ -823,7 +823,7 @@ export default function App() {
                 activeTab === "home" && currentUser?.role === "kierowca" && React.createElement(KierowcaHome, { pickups: pickups, setPickups: setPickups, currentUser: currentUser }),
                 activeTab === "home" && currentUser?.role !== "kierowca" && React.createElement(Pulpit, { tx, dispatch, mm, materials, stock, company, setCompany, openIntake: () => setIntakeOpen(true), setViewDoc, setTab, controls, setControls, settings, setSettings, reports, generateReport, currentUser, isOwner, can, onLogout: logout, openUsers: () => setUsersOpen(true), openPerms: () => setPermsOpen(true), openClient: () => setMode("client"), newReqCount, notifItems, notifCount: notifItems.length, markNotifsRead, notifOn: settings.notif, onEnableNotif: enableNotif, loadDemo, clearDemo }),
                 activeTab === "tx" && can("transactions") && React.createElement(Transakcje, { tx, setViewDoc }),
-                activeTab === "cennik" && can("cennikView") && React.createElement(Cennik, { materials, setMaterials, canEdit: can("cennikEdit"), company }),
+                activeTab === "cennik" && can("cennikView") && React.createElement(Cennik, { materials, setMaterials, canEdit: can("cennikEdit"), company, showMargin: isOwner }),
                 activeTab === "intel" && can("cennikView") && React.createElement(InteligencjaCen, { materials, setMaterials, stock }),
                 activeTab === "mag" && can("magazyn") && React.createElement(Magazyn, { materials, stock, mm, dispatch, setDispatch }),
                 activeTab === "mkt" && can("marketing") && React.createElement(Marketing, { requests, materials, campaigns, setCampaigns, tx, company }),
@@ -2014,7 +2014,7 @@ function CennikGrafika({ materials, company, onClose }) {
                 " Pobierz grafik\u0119 (PNG)"),
             React.createElement("div", { style: { fontSize: 13.5, color: "var(--muted)", marginTop: 10, lineHeight: 1.5, textAlign: "center" } }, "Gotowe do druku, wywieszenia w punkcie lub wrzucenia na Facebooka / Google Moja Firma."))))));
 }
-function Cennik({ materials, setMaterials, canEdit = true, company }) {
+function Cennik({ materials, setMaterials, canEdit = true, company, showMargin = true }) {
     const [q, setQ] = useState("");
     const [gfxOpen, setGfxOpen] = useState(false);
     const [edit, setEdit] = useState(null);
@@ -2043,8 +2043,8 @@ function Cennik({ materials, setMaterials, canEdit = true, company }) {
         React.createElement("div", { style: { display: "flex", padding: "16px 12px 4px", fontSize: 12.5, color: "var(--faint)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em" } },
             React.createElement("span", { style: { flex: 1 } }, "Materia\u0142"),
             React.createElement("span", { style: { width: 74, textAlign: "right" } }, "Skup"),
-            React.createElement("span", { style: { width: 74, textAlign: "right" } }, "Sprzeda\u017C"),
-            React.createElement("span", { style: { width: 52, textAlign: "right" } }, "Mar\u017Ca")),
+            showMargin && React.createElement("span", { style: { width: 74, textAlign: "right" } }, "Sprzeda\u017C"),
+            showMargin && React.createElement("span", { style: { width: 52, textAlign: "right" } }, "Mar\u017Ca")),
         groups.map((g) => {
             const items = materials.filter((m) => m.g === g && matches(m));
             if (!items.length)
@@ -2058,8 +2058,8 @@ function Cennik({ materials, setMaterials, canEdit = true, company }) {
                     return (React.createElement("div", { key: m.id, onClick: () => open(m), style: { display: "flex", alignItems: "center", padding: "12px 10px", cursor: canEdit ? "pointer" : "default", borderBottom: i < items.length - 1 ? "1px solid var(--line)" : "none" } },
                         React.createElement("span", { style: { flex: 1, fontSize: 14, fontWeight: 600, paddingRight: 8 } }, m.n),
                         React.createElement("span", { style: { width: 74, textAlign: "right", fontFamily: "var(--mono)", fontSize: 15, fontWeight: 700 } }, m.buy.toFixed(2)),
-                        React.createElement("span", { style: { width: 74, textAlign: "right", fontFamily: "var(--mono)", fontSize: 15, color: "var(--muted)" } }, m.sell.toFixed(2)),
-                        React.createElement("span", { style: { width: 52, textAlign: "right", fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: marza >= 20 ? "var(--green)" : "var(--amber)" } },
+                        showMargin && React.createElement("span", { style: { width: 74, textAlign: "right", fontFamily: "var(--mono)", fontSize: 15, color: "var(--muted)" } }, m.sell.toFixed(2)),
+                        showMargin && React.createElement("span", { style: { width: 52, textAlign: "right", fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color: marza >= 20 ? "var(--green)" : "var(--amber)" } },
                             Math.round(marza),
                             "%")));
                 }))));
