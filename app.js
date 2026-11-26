@@ -2743,7 +2743,7 @@ function DocOverlay({ tx, company, onClose, onNew, created, onDelete }) {
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: "var(--display)", fontWeight: 800, fontSize: 15 } }, "Przyj\u0119cie zapisane"),
                     React.createElement("div", { style: { fontSize: 14, color: "var(--muted)" } }, "Dodano do ewidencji \u00B7 wpis do BDO")))),
-            React.createElement("div", { id: "fpo-doc", className: tx.kind === "FPO" ? "fpo-podglad" : "print-target", style: { background: "#fff", border: "1px solid var(--line)", borderRadius: 14, padding: 18, boxShadow: "0 10px 30px -18px rgba(0,0,0,.4)" } },
+            React.createElement("div", { id: "fpo-doc", className: tx.kind === "FPO" ? "fpo-podglad" : "print-target", style: { "--text": "#111827", "--muted": "#4b5563", "--faint": "#6b7280", "--line": "#e5e7eb", "--line2": "#d1d5db", "--surface2": "#f3f4f6", color: "#111827", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: 18, boxShadow: "0 10px 30px -18px rgba(0,0,0,.4)" } },
                 React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid var(--text)", paddingBottom: 12 } },
                     React.createElement("div", null,
                         React.createElement("div", { style: { fontFamily: "var(--display)", fontWeight: 800, fontSize: 15, lineHeight: 1.15 } }, tx.kind === "FPO" ? "FORMULARZ PRZYJĘCIA ODPADÓW METALI" : "KARTA PRZEKAZANIA ODPADU"),

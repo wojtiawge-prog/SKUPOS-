@@ -305,6 +305,18 @@ async function przygotuj(prof) {
         users = [];
     if (!users.find((u) => u.id === prof.id))
         users.push({ id: prof.id, login: prof.login || "wlasciciel", pass: "", name: prof.imie || "Właściciel", role: prof.rola || "owner" });
+    // Zespół z bazy (konta pracowników firmy) → lista użytkowników aplikacji (zadania, przełącznik profili)
+    try {
+        const { data: team } = await getSupa().from("profile").select("id,imie,login,rola,aktywny").eq("firma_id", prof.firma_id);
+        (team || []).forEach((p) => {
+            if (p.aktywny === false || p.rola === "client") return;
+            const e = { id: p.id, login: p.login || "", name: p.imie || p.login || "Pracownik", role: p.rola };
+            const i = users.findIndex((u) => u.id === p.id);
+            if (i >= 0) users[i] = { ...users[i], ...e };
+            else users.push({ ...e, pass: "" });
+        });
+    }
+    catch (e) { }
     try {
         localStorage.setItem("sk_users_v2", JSON.stringify(users));
     }
