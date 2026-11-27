@@ -92,7 +92,7 @@ function syncBanner() {
     } catch (e) { }
 }
 let _rola = null; // rola zalogowanego: dane firmy i uprawnienia zapisuje tylko właściciel (RLS)
-const TYLKO_WLASCICIEL = ["sk_co_v2", "sk_perms_v2"];
+const TYLKO_WLASCICIEL = ["sk_co_v2", "sk_perms_v2", "sk_buyers_v1"];
 function pushKey(s, firmaId, k, val) {
     if (_rola && _rola !== "owner" && TYLKO_WLASCICIEL.indexOf(k) !== -1) { delete _pending[k]; syncBanner(); return; }
     _pending[k] = { firmaId, val };

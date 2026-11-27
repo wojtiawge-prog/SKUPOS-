@@ -448,6 +448,10 @@ export default function App() {
     const [campaigns, setCampaigns] = useState([]);
     const [pickups, setPickups] = useState([]);
     const [zadania, setZadania] = useState([]);
+    const [buyers, setBuyers] = useState([]); // odbiorcy (huty, pośrednicy) z własnymi cennikami
+    const buyersLoaded = useRef(false);
+    const ownerRef = useRef(false);
+    useEffect(() => { let off = false; load("sk_buyers_v1", null).then((b) => { if (off) return; if (Array.isArray(b)) setBuyers(b); buyersLoaded.current = true; }, () => { buyersLoaded.current = true; }); return () => { off = true; }; }, []);
     // ── Przycisk wstecz: cofanie w apce + podwójny wstecz na pulpicie, by wyjść ──
     useEffect(() => {
         try {
@@ -623,6 +627,8 @@ export default function App() {
         save("sk_mkt_v2", campaigns); }, [campaigns, ready]);
     useEffect(() => { if (ready)
         save("sk_pick_v2", pickups); }, [pickups, ready]);
+    useEffect(() => { if (ready && buyersLoaded.current && ownerRef.current)
+        save("sk_buyers_v1", buyers); }, [buyers, ready]);
     const mm = useMemo(() => matMap(materials), [materials]);
     const stock = useMemo(() => {
         const s = {};
@@ -777,6 +783,7 @@ export default function App() {
             React.createElement(ClientApp, { materials: materials, tx: tx, clientProfile: clientProfile, setClientProfile: setClientProfile, requests: requests, setRequests: setRequests, preview: true, onExit: () => setMode("operator"), notifSeen: notifSeen, setNotifSeen: setNotifSeen, notifOn: settings.notif, onEnableNotif: enableNotif })));
     }
     const isOwner = currentUser.role === "owner";
+    ownerRef.current = isOwner;
     const rolePerms = perms[currentUser.role] || {};
     const can = (k) => isOwner ? true : !!rolePerms[k];
     const newReqCount = requests.filter((r) => r.status === "new").length;
@@ -825,7 +832,7 @@ export default function App() {
                 activeTab === "tx" && can("transactions") && React.createElement(Transakcje, { tx, setViewDoc }),
                 activeTab === "cennik" && can("cennikView") && React.createElement(Cennik, { materials, setMaterials, canEdit: can("cennikEdit"), company, showMargin: isOwner }),
                 activeTab === "intel" && can("cennikView") && React.createElement(InteligencjaCen, { materials, setMaterials, stock }),
-                activeTab === "mag" && can("magazyn") && React.createElement(Magazyn, { materials, stock, mm, dispatch, setDispatch }),
+                activeTab === "mag" && can("magazyn") && React.createElement(Magazyn, { materials, stock, mm, dispatch, setDispatch, buyers, setBuyers, isOwner }),
                 activeTab === "mkt" && can("marketing") && React.createElement(Marketing, { requests, materials, campaigns, setCampaigns, tx, company }),
                 activeTab === "wyw" && can("pickups") && React.createElement(Wywozy, { pickups, setPickups }),
                 activeTab === "ksieg" && can("accounting") && React.createElement(Ksiegowosc, { tx, dispatch, materials, stock, company }),
@@ -2254,11 +2261,16 @@ function KonsolidacjaTransportu({ materials, stock }) {
                 React.createElement("input", { type: "number", value: param[k], onChange: e => upd(k, e.target.value), style: { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line2)", background: "var(--surface2)", color: "var(--text)", fontSize: 15, fontFamily: "var(--mono)", fontWeight: 700, outline: "none", boxSizing: "border-box" } })))),
             React.createElement("div", { style: { fontSize: 13, color: "var(--faint)", lineHeight: 1.5, marginTop: 4 } }, "Parametry zapisuj\u0105 si\u0119 lokalnie. Ustaw raz pod swoje auto i tras\u0119 do huty.")))));
 }
-function Magazyn({ materials, stock, mm, dispatch, setDispatch }) {
+function Magazyn({ materials, stock, mm, dispatch, setDispatch, buyers = [], setBuyers, isOwner = true }) {
     const [wyd, setWyd] = useState(false);
     const [wMat, setWMat] = useState("");
     const [wW, setWW] = useState("");
     const [wKontr, setWKontr] = useState("");
+    const [wPrice, setWPrice] = useState("");
+    const [buyersOpen, setBuyersOpen] = useState(false);
+    const buyerByName = (n) => (buyers || []).find((b) => b.name.trim().toLowerCase() === String(n || "").trim().toLowerCase());
+    const suggestPrice = (matId, kontr) => { const b = buyerByName(kontr); const p = b && b.prices ? b.prices[matId] : undefined; return p != null && p !== "" ? +p : ((mm[matId] || {}).sell || 0); };
+    useEffect(() => { if (wyd && wMat) setWPrice(String(suggestPrice(wMat, wKontr) || "")); }, [wMat, wKontr, wyd]);
     const rows = materials.map((m) => ({ ...m, st: stock[m.id] || 0 })).filter((m) => m.st > 0).sort((a, b) => b.st * b.buy - a.st * a.buy);
     const totMass = rows.reduce((a, m) => a + m.st, 0);
     const totCost = rows.reduce((a, m) => a + m.st * m.buy, 0);
@@ -2270,10 +2282,12 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch }) {
         const w = parseFloat(wW);
         if (!wMat || isNaN(w) || w <= 0 || !wKontr.trim())
             return;
-        setDispatch((p) => [{ id: uid(), matId: wMat, w, contractor: wKontr.trim(), dateKey: todayStr(), ts: Date.now() }, ...p]);
+        const pr = isOwner ? parseFloat(String(wPrice).replace(",", ".")) : suggestPrice(wMat, wKontr);
+        setDispatch((p) => [{ id: uid(), matId: wMat, w, contractor: wKontr.trim(), ...(pr > 0 ? { price: Math.round(pr * 100) / 100 } : {}), dateKey: todayStr(), ts: Date.now() }, ...p]);
         setWMat("");
         setWW("");
         setWKontr("");
+        setWPrice("");
         setWyd(false);
     };
     return (React.createElement("div", { style: { padding: "0 16px" } },
@@ -2286,14 +2300,16 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch }) {
             React.createElement("button", { onClick: () => { setWMat(rows[0] ? rows[0].id : (materials[0] && materials[0].id)); setWW(""); setWKontr(""); setWyd(true); }, style: { ...iconBtn, width: "auto", padding: "0 14px", gap: 7, fontSize: 14.5, fontWeight: 700, color: "var(--copper)" } },
                 React.createElement(Truck, { size: 16 }),
                 " Wydaj")),
+        isOwner && React.createElement("button", { onClick: () => setBuyersOpen(true), style: { ...btnGhost, marginTop: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } }, React.createElement(Factory, { size: 17 }), " Odbiorcy i ich ceny (", (buyers || []).length, ")"),
+        isOwner && buyersOpen && React.createElement(OdbiorcyPanel, { buyers, setBuyers, materials, onClose: () => setBuyersOpen(false) }),
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, marginTop: 16 } },
             React.createElement(Card, { pad: 14 },
                 React.createElement("div", { style: { fontSize: 13.5, color: "var(--muted)" } }, "Warto\u015B\u0107 (koszt skupu)"),
                 React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 21, marginTop: 4 } }, plnShort(totCost))),
-            React.createElement(Card, { pad: 14 },
+            isOwner && React.createElement(Card, { pad: 14 },
                 React.createElement("div", { style: { fontSize: 13.5, color: "var(--muted)" } }, "Potencjalny przych\u00F3d"),
                 React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 21, marginTop: 4, color: "#3f7d8a" } }, plnShort(totSell)))),
-        React.createElement(Card, { style: { marginTop: 11, background: "linear-gradient(135deg,rgba(21,163,74,.1),rgba(21,163,74,.02))", border: "1px solid rgba(21,163,74,.25)" } },
+        isOwner && React.createElement(Card, { style: { marginTop: 11, background: "linear-gradient(135deg,rgba(21,163,74,.1),rgba(21,163,74,.02))", border: "1px solid rgba(21,163,74,.25)" } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 9 } },
                     React.createElement("div", { style: { width: 36, height: 36, borderRadius: 10, background: "rgba(21,163,74,.15)", display: "grid", placeItems: "center" } },
@@ -2313,7 +2329,7 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch }) {
                 React.createElement("span", { style: { fontFamily: "var(--mono)" } },
                     "koszt ",
                     plnShort(m.st * m.buy)),
-                React.createElement("span", { style: { fontFamily: "var(--mono)" } },
+                isOwner && React.createElement("span", { style: { fontFamily: "var(--mono)" } },
                     "sprzeda\u017C ",
                     plnShort(m.st * m.sell)))))),
         recentDisp.length > 0 && (React.createElement(React.Fragment, null,
@@ -2346,12 +2362,45 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch }) {
                     React.createElement("label", { style: label }, "Masa (kg)"),
                     React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18 }, type: "number", inputMode: "decimal", value: wW, onChange: (e) => setWW(e.target.value), placeholder: "0" })),
                 React.createElement("div", { style: { flex: 1.4 } },
-                    React.createElement("label", { style: label }, "Kontrahent"),
-                    React.createElement("input", { style: inputStyle, value: wKontr, onChange: (e) => setWKontr(e.target.value), placeholder: "np. Huta Stali" }))),
+                    React.createElement("label", { style: label }, "Odbiorca"),
+                    React.createElement("input", { style: inputStyle, list: "sk-buyers-list", value: wKontr, onChange: (e) => setWKontr(e.target.value), placeholder: "np. Huta Stali" }),
+                    React.createElement("datalist", { id: "sk-buyers-list" }, (buyers || []).map((b) => React.createElement("option", { key: b.id, value: b.name }))))),
+            (buyers || []).length > 0 && React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 } }, buyers.map((b) => React.createElement("button", { key: b.id, onClick: () => setWKontr(b.name), style: { padding: "7px 12px", borderRadius: 99, cursor: "pointer", fontSize: 13.5, fontWeight: 700, border: buyerByName(wKontr) === b ? "2px solid var(--copper)" : "1px solid var(--line2)", background: buyerByName(wKontr) === b ? "rgba(200,116,63,.12)" : "transparent", color: "var(--text)" } }, b.name))),
+            isOwner && React.createElement("div", { style: { marginTop: 12 } },
+                React.createElement("label", { style: label }, "Cena sprzeda\u017Cy (z\u0142/kg)", buyerByName(wKontr) && buyerByName(wKontr).prices && buyerByName(wKontr).prices[wMat] != null ? React.createElement("span", { style: { color: "var(--faint)", fontWeight: 400 } }, " \u00B7 z cennika odbiorcy, mo\u017Cesz zmieni\u0107") : React.createElement("span", { style: { color: "var(--faint)", fontWeight: 400 } }, " \u00B7 z Twojego cennika, mo\u017Cesz zmieni\u0107")),
+                React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 18 }, type: "number", inputMode: "decimal", value: wPrice, onChange: (e) => setWPrice(e.target.value), placeholder: "0.00" }),
+                parseFloat(wW) > 0 && parseFloat(wPrice) > 0 && React.createElement("div", { style: { fontSize: 13.5, color: "var(--muted)", marginTop: 6 } }, "Przych\u00F3d z wydania: ", React.createElement("b", { style: { color: "var(--text)" } }, plnShort(parseFloat(wW) * parseFloat(wPrice))))),
             wMat && parseFloat(wW) > 0 && (stock[wMat] || 0) - parseFloat(wW) < 0 && React.createElement("div", { style: { fontSize: 13.5, color: "var(--amber)", marginTop: 10, fontWeight: 600 } }, "Uwaga: wydanie wi\u0119ksze ni\u017C stan \u2014 magazyn zejdzie poni\u017Cej zera."),
             React.createElement("button", { style: { ...btnCopper, marginTop: 16 }, onClick: addDispatch },
                 React.createElement(Truck, { size: 18 }),
                 " Zatwierd\u017A wydanie"))));
+}
+/* ─────────── Odbiorcy: huty / pośrednicy z własnymi cenami ─────────── */
+function OdbiorcyPanel({ buyers, setBuyers, materials, onClose }) {
+    const [sel, setSel] = useState(null);
+    const [name, setName] = useState("");
+    const b = (buyers || []).find((x) => x.id === sel);
+    const add = () => { const n = name.trim(); if (!n) return; const nb = { id: uid(), name: n, prices: {}, updated: Date.now() }; setBuyers((p) => [...(p || []), nb]); setName(""); setSel(nb.id); };
+    const setPrice = (matId, v) => setBuyers((p) => p.map((x) => x.id === sel ? { ...x, prices: { ...(x.prices || {}), [matId]: v === "" ? undefined : +String(v).replace(",", ".") }, updated: Date.now() } : x));
+    const rename = (v) => setBuyers((p) => p.map((x) => x.id === sel ? { ...x, name: v } : x));
+    const remove = () => { setBuyers((p) => p.filter((x) => x.id !== sel)); setSel(null); };
+    return React.createElement(Sheet, { open: true, onClose, title: b ? b.name || "Odbiorca" : "Odbiorcy" },
+        !b && React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { fontSize: 14, color: "var(--muted)", lineHeight: 1.5, marginBottom: 12 } }, "Huty i po\u015Brednicy, kt\u00F3rym sprzedajesz. Ka\u017Cdy ma w\u0142asne ceny \u2014 przy wydaniu cena podpowie si\u0119 sama, a zysk policzy si\u0119 z faktycznej ceny sprzeda\u017Cy. Widzisz to tylko Ty."),
+            (buyers || []).map((x) => React.createElement("button", { key: x.id, onClick: () => setSel(x.id), style: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 12px", marginBottom: 8, borderRadius: 12, border: "1px solid var(--line2)", background: "var(--surface2)", color: "var(--text)", cursor: "pointer", fontSize: 15, fontWeight: 700 } }, x.name, React.createElement("span", { style: { fontSize: 13, color: "var(--muted)", fontWeight: 500 } }, Object.values(x.prices || {}).filter((v) => v != null).length, " cen ", React.createElement(ChevronRight, { size: 14 })))),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 6 } },
+                React.createElement("input", { style: { ...inputStyle, flex: 1 }, value: name, onChange: (e) => setName(e.target.value), placeholder: "Nowy odbiorca, np. Huta Gda\u0144sk" }),
+                React.createElement("button", { onClick: add, style: { ...btnCopper, width: "auto", padding: "0 18px", marginTop: 0 } }, React.createElement(Plus, { size: 18 })))),
+        b && React.createElement(React.Fragment, null,
+            React.createElement("button", { onClick: () => setSel(null), style: { ...btnGhost, marginBottom: 12 } }, "\u2190 Wszyscy odbiorcy"),
+            React.createElement("label", { style: label }, "Nazwa"),
+            React.createElement("input", { style: inputStyle, value: b.name, onChange: (e) => rename(e.target.value) }),
+            React.createElement("div", { style: { ...sectionTitle, margin: "18px 2px 8px" } }, "Ceny tego odbiorcy (z\u0142/kg)"),
+            React.createElement("div", { style: { fontSize: 13, color: "var(--faint)", marginBottom: 8 } }, "Puste = podpowie Twoj\u0105 og\u00F3ln\u0105 cen\u0119 sprzeda\u017Cy z cennika."),
+            (materials || []).map((m) => React.createElement("div", { key: m.id, style: { display: "flex", alignItems: "center", gap: 10, padding: "8px 2px", borderBottom: "1px solid var(--line)" } },
+                React.createElement("span", { style: { flex: 1, fontSize: 14, fontWeight: 600 } }, m.n),
+                React.createElement("input", { style: { ...inputStyle, width: 100, marginTop: 0, fontFamily: "var(--mono)", fontWeight: 700, textAlign: "right" }, type: "number", inputMode: "decimal", value: b.prices && b.prices[m.id] != null ? b.prices[m.id] : "", placeholder: (m.sell || 0).toFixed(2), onChange: (e) => setPrice(m.id, e.target.value) }))),
+            React.createElement("button", { onClick: remove, style: { ...btnGhost, marginTop: 18, color: "var(--red)", borderColor: "rgba(220,38,38,.3)" } }, "Usu\u0144 odbiorc\u0119")));
 }
 /* ─────────── Intake (full screen) ─────────── */
 function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
