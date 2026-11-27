@@ -18,11 +18,11 @@ export const klientToRow = (t, firma_id) => t.firma
   : { firma_id, app_id: klientKey(t), typ: "osoba", imie: (t.osoba || {}).imie || "", nazwisko: (t.osoba || {}).nazwisko || "", adres: (t.osoba || {}).adres || "", dowod_nr: (t.osoba || {}).dowod || null, rejestracje: t.plate ? [t.plate] : [] };
 
 export const txToRows = (t, firma_id, klient_id, matIdByApp) => ({
-  tx: { firma_id, app_id: t.id, nr: t.no || null, rodzaj: t.kind === "KPO" ? "KPO" : "FPO", klient_id, rejestracja: t.plate || null, platnosc: ["gotowka", "przelew", "blik"].includes(t.payment) ? t.payment : "gotowka", pochodzenie: t.zrodlo || null, produkt: t.produkt || null, uwagi: t.uwagi || null, oswiadczenie: !!(t.osw || t.kind === "KPO"), suma: r2((t.pos || []).reduce((a, p) => a + p.w * p.price, 0)), masa: r1((t.pos || []).reduce((a, p) => a + (+p.w || 0), 0)), created_at: new Date(t.ts).toISOString() },
+  tx: { firma_id, app_id: t.id, ...(t.punkt ? { punkt_id: t.punkt } : {}), nr: t.no || null, rodzaj: t.kind === "KPO" ? "KPO" : "FPO", klient_id, rejestracja: t.plate || null, platnosc: ["gotowka", "przelew", "blik"].includes(t.payment) ? t.payment : "gotowka", pochodzenie: t.zrodlo || null, produkt: t.produkt || null, uwagi: t.uwagi || null, oswiadczenie: !!(t.osw || t.kind === "KPO"), suma: r2((t.pos || []).reduce((a, p) => a + p.w * p.price, 0)), masa: r1((t.pos || []).reduce((a, p) => a + (+p.w || 0), 0)), created_at: new Date(t.ts).toISOString() },
   pozycje: (t.pos || []).filter((p) => +p.w > 0).map((p) => ({ firma_id, towar_id: matIdByApp[p.matId] || null, nazwa: p.n, masa: r1(p.w), cena: r2(p.price) })),
 });
 
-export const dispToRow = (d, firma_id, matIdByApp) => ({ firma_id, app_id: d.id, towar_id: matIdByApp[d.matId] || null, masa: r1(d.w), cena: d.price != null ? r2(d.price) : null, odbiorca: d.contractor || null, data: d.dateKey || new Date(d.ts).toISOString().slice(0, 10) });
+export const dispToRow = (d, firma_id, matIdByApp) => ({ firma_id, app_id: d.id, ...(d.punkt ? { punkt_id: d.punkt } : {}), towar_id: matIdByApp[d.matId] || null, masa: r1(d.w), cena: d.price != null ? r2(d.price) : null, odbiorca: d.contractor || null, data: d.dateKey || new Date(d.ts).toISOString().slice(0, 10) });
 
 // ── wiersze → aplikacja ──
 export const rowToMat = (r) => ({ id: r.app_id || r.id, code: r.kod || undefined, n: r.nazwa, g: r.grupa, buy: +r.cena_skup, sell: +r.cena_sprzedaz, stock: 0, _dbId: r.id });
@@ -31,7 +31,7 @@ export const rowsToTx = (txRows, pozRows, klienci, appIdByMatId, grupaByMatId = 
   const kl = {}; klienci.forEach((k) => { kl[k.id] = k; });
   return txRows.filter((t) => !t.anulowana).map((t) => {
     const k = kl[t.klient_id] || {};
-    const base = { id: t.app_id || t.id, no: t.nr, ts: Date.parse(t.created_at), kind: t.rodzaj, payment: t.platnosc, plate: t.rejestracja || "", zrodlo: t.pochodzenie || "", _dbId: t.id,
+    const base = { id: t.app_id || t.id, ...(t.punkt_id ? { punkt: t.punkt_id } : {}), no: t.nr, ts: Date.parse(t.created_at), kind: t.rodzaj, payment: t.platnosc, plate: t.rejestracja || "", zrodlo: t.pochodzenie || "", _dbId: t.id,
       ...(t.produkt ? { produkt: t.produkt } : {}), ...(t.uwagi ? { uwagi: t.uwagi } : {}),
       pos: (byTx[t.id] || []).map((p) => ({ matId: appIdByMatId[p.towar_id] || p.towar_id, n: p.nazwa, g: grupaByMatId[p.towar_id] || "FE", w: +p.masa, price: +p.cena })) };
     if (t.rodzaj === "KPO") base.firma = { nazwa: k.nazwa || "", nip: k.nip || "" };
@@ -39,7 +39,7 @@ export const rowsToTx = (txRows, pozRows, klienci, appIdByMatId, grupaByMatId = 
     return base;
   }).sort((a, b) => b.ts - a.ts);
 };
-export const rowToDisp = (r, appIdByMatId) => ({ id: r.app_id || r.id, matId: appIdByMatId[r.towar_id] || r.towar_id, w: +r.masa, price: r.cena != null ? +r.cena : undefined, contractor: r.odbiorca || "", dateKey: r.data, ts: Date.parse(r.created_at || r.data), _dbId: r.id });
+export const rowToDisp = (r, appIdByMatId) => ({ id: r.app_id || r.id, ...(r.punkt_id ? { punkt: r.punkt_id } : {}), matId: appIdByMatId[r.towar_id] || r.towar_id, w: +r.masa, price: r.cena != null ? +r.cena : undefined, contractor: r.odbiorca || "", dateKey: r.data, ts: Date.parse(r.created_at || r.data), _dbId: r.id });
 
 // ── odczyt wszystkiego (stronicowany, bo PostgREST zwraca max 1000 wierszy naraz) ──
 async function all(q) { const out = []; for (let from = 0; ; from += 1000) { const { data, error } = await q().range(from, from + 999); if (error) throw error; out.push(...data); if (data.length < 1000) return out; } }

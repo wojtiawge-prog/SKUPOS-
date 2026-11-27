@@ -298,6 +298,11 @@ async function loguj(email, haslo) {
 // ── Po zalogowaniu: przygotuj stan lokalny, by apka wstała zalogowana ──
 async function przygotuj(prof) {
     _rola = prof.rola || null;
+    window.__cloudPunkty = {
+        add: async (nazwa, adres) => { const { data, error } = await getSupa().from("punkty").insert({ firma_id: prof.firma_id, nazwa, adres: adres || null }).select("id,nazwa,adres,aktywny").single(); if (error) throw error; return data; },
+        update: async (id, patch) => { const { error } = await getSupa().from("punkty").update(patch).eq("id", id); if (error) throw error; },
+        assign: async (profileId, punktId) => { const { error } = await getSupa().from("profile").update({ punkt_id: punktId || null }).eq("id", profileId); if (error) throw error; },
+    };
     await pull(prof.firma_id);
     await pullZgloszenia(prof);
     let users = [];
@@ -309,12 +314,18 @@ async function przygotuj(prof) {
         users = [];
     if (!users.find((u) => u.id === prof.id))
         users.push({ id: prof.id, login: prof.login || "wlasciciel", pass: "", name: prof.imie || "Właściciel", role: prof.rola || "owner" });
+    // Punkty skupu (lokalizacje firmy)
+    try {
+        const { data: pk } = await getSupa().from("punkty").select("id,nazwa,adres,aktywny").eq("firma_id", prof.firma_id).order("created_at");
+        localStorage.setItem("sk_punkty", JSON.stringify((pk || []).filter((x) => x.aktywny !== false)));
+    }
+    catch (e) { }
     // Zespół z bazy (konta pracowników firmy) → lista użytkowników aplikacji (zadania, przełącznik profili)
     try {
-        const { data: team } = await getSupa().from("profile").select("id,imie,login,rola,aktywny").eq("firma_id", prof.firma_id);
+        const { data: team } = await getSupa().from("profile").select("id,imie,login,rola,aktywny,punkt_id").eq("firma_id", prof.firma_id);
         (team || []).forEach((p) => {
             if (p.aktywny === false || p.rola === "client") return;
-            const e = { id: p.id, login: p.login || "", name: p.imie || p.login || "Pracownik", role: p.rola };
+            const e = { id: p.id, login: p.login || "", name: p.imie || p.login || "Pracownik", role: p.rola, punkt: p.punkt_id || null };
             const i = users.findIndex((u) => u.id === p.id);
             if (i >= 0) users[i] = { ...users[i], ...e };
             else users.push({ ...e, pass: "" });

@@ -420,11 +420,11 @@ export default function App() {
     const [ready, setReady] = useState(false);
     const [tab, setTab] = useState("home");
     const [materials, setMaterials] = useState(seedMaterials);
-    const [tx, setTx] = useState([]);
+    const [txAll, setTx] = useState([]);
     const [company, setCompany] = useState(SEED_COMPANY);
     const [intakeOpen, setIntakeOpen] = useState(false);
     const [viewDoc, setViewDoc] = useState(null);
-    const [dispatch, setDispatch] = useState([]);
+    const [dispatchAll, setDispatch] = useState([]);
     const [controls, setControls] = useState([]);
     const [reports, setReports] = useState([]);
     const [settings, setSettings] = useState({ reportHour: "20:00", reportOn: true, notif: false });
@@ -448,6 +448,14 @@ export default function App() {
     const [campaigns, setCampaigns] = useState([]);
     const [pickups, setPickups] = useState([]);
     const [zadania, setZadania] = useState([]);
+    // ── Punkty skupu: właściciel wybiera punkt (puste = wszystkie); pracownik widzi swój z bazy ──
+    const [punkty, setPunkty] = useState(() => { try { return JSON.parse(localStorage.getItem("sk_punkty") || "[]") || []; } catch (e) { return []; } });
+    const [punktSel, setPunktSelS] = useState(() => { try { return localStorage.getItem("sk_punkt_sel") || ""; } catch (e) { return ""; } });
+    const setPunktSel = (v) => { setPunktSelS(v); try { localStorage.setItem("sk_punkt_sel", v || ""); } catch (e) { } };
+    const savePunkty = (list) => { setPunkty(list); try { localStorage.setItem("sk_punkty", JSON.stringify(list)); } catch (e) { } };
+    const punktOk = punktSel && punkty.some((x) => x.id === punktSel) ? punktSel : "";
+    const tx = useMemo(() => punktOk ? txAll.filter((t) => t.punkt === punktOk) : txAll, [txAll, punktOk]);
+    const dispatch = useMemo(() => punktOk ? dispatchAll.filter((d) => d.punkt === punktOk) : dispatchAll, [dispatchAll, punktOk]);
     const [buyers, setBuyers] = useState([]); // odbiorcy (huty, pośrednicy) z własnymi cennikami
     const buyersLoaded = useRef(false);
     const ownerRef = useRef(false);
@@ -552,11 +560,11 @@ export default function App() {
     useEffect(() => { if (ready)
         save("sk_mat_v2", materials); }, [materials, ready]);
     useEffect(() => { if (ready)
-        save("sk_tx_v2", tx); }, [tx, ready]);
+        save("sk_tx_v2", txAll); }, [txAll, ready]);
     useEffect(() => { if (ready)
         save("sk_co_v2", company); }, [company, ready]);
     useEffect(() => { if (ready)
-        save("sk_disp_v2", dispatch); }, [dispatch, ready]);
+        save("sk_disp_v2", dispatchAll); }, [dispatchAll, ready]);
     useEffect(() => { if (ready)
         save("sk_ctrl_v2", controls); }, [controls, ready]);
     useEffect(() => { if (ready)
@@ -737,11 +745,11 @@ export default function App() {
     const nextNo = (kind) => {
         const d = now();
         const pre = `${kind}/${d.getFullYear()}/${pad(d.getMonth() + 1)}/`;
-        const n = tx.filter((t) => t.kind === kind).length + (kind === "FPO" ? 8 : 12);
+        const n = txAll.filter((t) => t.kind === kind).length + (kind === "FPO" ? 8 : 12);
         return pre + pad(n).padStart(4, "0");
     };
     const commitIntake = (data) => {
-        const t = { id: uid(), no: nextNo(data.kind), ts: Date.now(), ...data };
+        const t = { id: uid(), no: nextNo(data.kind), ts: Date.now(), ...(punktOk ? { punkt: punktOk } : {}), ...data };
         setTx((p) => [t, ...p]);
         return t;
     };
@@ -802,6 +810,7 @@ export default function App() {
         { id: "zadania", label: "Zadania", icon: BadgeCheck },
         ...(can("requests") ? [{ id: "req", label: "Zg\u0142oszenia", icon: Inbox }] : []),
         ...(isOwner ? [{ id: "kopia", label: "Eksport, kopia, dziennik", icon: ShieldCheck }] : []),
+        ...(isOwner && typeof window !== "undefined" && window.__cloudPunkty ? [{ id: "punkty", label: "Punkty skupu", icon: MapPin }] : []),
         ...((can("marketing") || can("accounting")) ? [{ id: "nadzorca", label: "Podpowiedzi", icon: AlertTriangle }] : []),
         ...((can("marketing") || can("accounting")) ? [{ id: "ai", label: "Doradca AI", icon: Sparkles }] : []),
         ...(can("pickups") ? [{ id: "wyw", label: "Wywozy", icon: Truck }] : []),
@@ -827,12 +836,14 @@ export default function App() {
             React.createElement("div", { key: activeTab, className: "sk-main", style: { animation: "slideFade .34s cubic-bezier(.22,1,.36,1)" } },
                 hasMag && (activeTab === "mag" || activeTab === "wyw") && segBar([["mag", "Stan magazynu"], ["wyw", "Wywozy"]]),
                 (activeTab === "cennik" || activeTab === "konkur") && segBar([["cennik", "M\u00F3j cennik"], ["konkur", "Ceny u konkurencji"]]),
+                isOwner && punkty.length > 0 && React.createElement(PunktSwitch, { punkty, value: punktOk, onChange: setPunktSel }),
+                activeTab === "punkty" && isOwner && React.createElement(PunktyPanel, { punkty, savePunkty, users, setUsers, punktSel: punktOk, setPunktSel }),
                 activeTab === "home" && currentUser?.role === "kierowca" && React.createElement(KierowcaHome, { pickups: pickups, setPickups: setPickups, currentUser: currentUser }),
                 activeTab === "home" && currentUser?.role !== "kierowca" && React.createElement(Pulpit, { tx, dispatch, mm, materials, stock, company, setCompany, openIntake: () => setIntakeOpen(true), setViewDoc, setTab, controls, setControls, settings, setSettings, reports, generateReport, currentUser, isOwner, can, onLogout: logout, openUsers: () => setUsersOpen(true), openPerms: () => setPermsOpen(true), openClient: () => setMode("client"), newReqCount, notifItems, notifCount: notifItems.length, markNotifsRead, notifOn: settings.notif, onEnableNotif: enableNotif, loadDemo, clearDemo }),
                 activeTab === "tx" && can("transactions") && React.createElement(Transakcje, { tx, setViewDoc }),
                 activeTab === "cennik" && can("cennikView") && React.createElement(Cennik, { materials, setMaterials, canEdit: can("cennikEdit"), company, showMargin: isOwner }),
                 activeTab === "intel" && can("cennikView") && React.createElement(InteligencjaCen, { materials, setMaterials, stock }),
-                activeTab === "mag" && can("magazyn") && React.createElement(Magazyn, { materials, stock, mm, dispatch, setDispatch, buyers, setBuyers, isOwner }),
+                activeTab === "mag" && can("magazyn") && React.createElement(Magazyn, { materials, stock, mm, dispatch, setDispatch, buyers, setBuyers, isOwner, punkt: punktOk }),
                 activeTab === "mkt" && can("marketing") && React.createElement(Marketing, { requests, materials, campaigns, setCampaigns, tx, company }),
                 activeTab === "wyw" && can("pickups") && React.createElement(Wywozy, { pickups, setPickups }),
                 activeTab === "ksieg" && can("accounting") && React.createElement(Ksiegowosc, { tx, dispatch, materials, stock, company }),
@@ -840,7 +851,7 @@ export default function App() {
                 activeTab === "nadzorca" && (can("marketing") || can("accounting")) && React.createElement(NadzorcaAI, { tx: tx, materials: materials }),
                 activeTab === "social" && can("marketing") && React.createElement(SocialAuto, { materials: materials, company: company }),
                 activeTab === "konkur" && can("cennikView") && React.createElement(KonkurencjaView, { materials: materials }),
-                activeTab === "kopia" && isOwner && React.createElement(KopiaDziennik, { tx, materials, stock, dispatch }),
+                activeTab === "kopia" && isOwner && React.createElement(KopiaDziennik, { tx: txAll, materials, stock, dispatch: dispatchAll }),
                 activeTab === "zadania" && React.createElement(Zadania, { zadania, setZadania, users, currentUser, isOwner }),
                 activeTab === "req" && can("requests") && React.createElement(RequestsInbox, { requests, setRequests, mm })),
             (() => {
@@ -2261,7 +2272,7 @@ function KonsolidacjaTransportu({ materials, stock }) {
                 React.createElement("input", { type: "number", value: param[k], onChange: e => upd(k, e.target.value), style: { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line2)", background: "var(--surface2)", color: "var(--text)", fontSize: 15, fontFamily: "var(--mono)", fontWeight: 700, outline: "none", boxSizing: "border-box" } })))),
             React.createElement("div", { style: { fontSize: 13, color: "var(--faint)", lineHeight: 1.5, marginTop: 4 } }, "Parametry zapisuj\u0105 si\u0119 lokalnie. Ustaw raz pod swoje auto i tras\u0119 do huty.")))));
 }
-function Magazyn({ materials, stock, mm, dispatch, setDispatch, buyers = [], setBuyers, isOwner = true }) {
+function Magazyn({ materials, stock, mm, dispatch, setDispatch, buyers = [], setBuyers, isOwner = true, punkt = "" }) {
     const [wyd, setWyd] = useState(false);
     const [wMat, setWMat] = useState("");
     const [wW, setWW] = useState("");
@@ -2283,7 +2294,7 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch, buyers = [], set
         if (!wMat || isNaN(w) || w <= 0 || !wKontr.trim())
             return;
         const pr = isOwner ? parseFloat(String(wPrice).replace(",", ".")) : suggestPrice(wMat, wKontr);
-        setDispatch((p) => [{ id: uid(), matId: wMat, w, contractor: wKontr.trim(), ...(pr > 0 ? { price: Math.round(pr * 100) / 100 } : {}), dateKey: todayStr(), ts: Date.now() }, ...p]);
+        setDispatch((p) => [{ id: uid(), matId: wMat, w, contractor: wKontr.trim(), ...(punkt ? { punkt } : {}), ...(pr > 0 ? { price: Math.round(pr * 100) / 100 } : {}), dateKey: todayStr(), ts: Date.now() }, ...p]);
         setWMat("");
         setWW("");
         setWKontr("");
@@ -2374,6 +2385,55 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch, buyers = [], set
             React.createElement("button", { style: { ...btnCopper, marginTop: 16 }, onClick: addDispatch },
                 React.createElement(Truck, { size: 18 }),
                 " Zatwierd\u017A wydanie"))));
+}
+/* ─────────── Punkty skupu ─────────── */
+function PunktSwitch({ punkty, value, onChange }) {
+    return React.createElement("div", { style: { padding: "12px 16px 0", display: "flex", gap: 7, overflowX: "auto", WebkitOverflowScrolling: "touch" } },
+        [["", "Wszystkie punkty"], ...punkty.map((p) => [p.id, p.nazwa])].map(([id, n]) => React.createElement("button", { key: id || "all", onClick: () => onChange(id), style: { flex: "0 0 auto", padding: "8px 14px", borderRadius: 99, cursor: "pointer", fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", border: value === id ? "2px solid var(--copper)" : "1px solid var(--line2)", background: value === id ? "rgba(200,116,63,.14)" : "var(--surface)", color: "var(--text)" } }, id ? "\uD83D\uDCCD " + n : n)));
+}
+function PunktyPanel({ punkty, savePunkty, users, setUsers, punktSel, setPunktSel }) {
+    const [nazwa, setNazwa] = useState("");
+    const [adres, setAdres] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState("");
+    const api = typeof window !== "undefined" ? window.__cloudPunkty : null;
+    const staff = (users || []).filter((u) => u.role !== "owner" && u.role !== "client");
+    const run = async (fn) => { setErr(""); setBusy(true); try { await fn(); } catch (e) { setErr("Nie uda\u0142o si\u0119 zapisa\u0107: " + (e && e.message || e)); } setBusy(false); };
+    const add = () => { const n = nazwa.trim(); if (!n || !api) return; run(async () => { const p = await api.add(n, adres.trim()); savePunkty([...punkty, p]); setNazwa(""); setAdres(""); }); };
+    const rename = (id, n) => savePunkty(punkty.map((p) => p.id === id ? { ...p, nazwa: n } : p));
+    const persistName = (id) => { const p = punkty.find((x) => x.id === id); if (p && api) run(() => api.update(id, { nazwa: p.nazwa.trim() || "Punkt" })); };
+    const archive = (id) => { if (!api) return; run(async () => { await api.update(id, { aktywny: false }); savePunkty(punkty.filter((p) => p.id !== id)); if (punktSel === id) setPunktSel(""); }); };
+    const assign = (u, pid) => { if (!api) return; run(async () => { await api.assign(u.id, pid); setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, punkt: pid || null } : x)); }); };
+    return React.createElement("div", { style: { padding: "0 16px 40px" } },
+        React.createElement("header", { style: { paddingTop: 24 } },
+            React.createElement("h1", { style: { margin: 0, fontFamily: "var(--display)", fontSize: 26, fontWeight: 800, letterSpacing: "-.02em" } }, "Punkty skupu"),
+            React.createElement("div", { style: { color: "var(--muted)", fontSize: 14.5, marginTop: 4, lineHeight: 1.5 } }, "Ka\u017Cdy punkt ma swoje przyj\u0119cia, wydania i magazyn. Ty widzisz wszystkie razem albo ka\u017Cdy osobno. Pracownik przypisany do punktu widzi tylko sw\u00F3j.")),
+        err && React.createElement("div", { style: { marginTop: 12, padding: 12, borderRadius: 12, background: "rgba(220,38,38,.1)", color: "var(--red)", fontSize: 14, fontWeight: 600 } }, err),
+        React.createElement("div", { style: sectionTitle }, "Twoje punkty"),
+        punkty.length === 0 && React.createElement("div", { style: { fontSize: 14, color: "var(--muted)" } }, "Brak punkt\u00F3w \u2014 dodaj pierwszy poni\u017Cej. Dop\u00F3ki ich nie ma, aplikacja dzia\u0142a jak jeden skup."),
+        punkty.map((p) => React.createElement(Card, { key: p.id, pad: 12, style: { marginBottom: 9 } },
+            React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
+                React.createElement(MapPin, { size: 18, color: "var(--copper)" }),
+                React.createElement("input", { style: { ...inputStyle, marginTop: 0, flex: 1, fontWeight: 700 }, value: p.nazwa, onChange: (e) => rename(p.id, e.target.value), onBlur: () => persistName(p.id) })),
+            p.adres && React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", marginTop: 6, paddingLeft: 26 } }, p.adres),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10 } },
+                React.createElement("button", { onClick: () => setPunktSel(p.id), style: { ...btnGhost, flex: 1, marginTop: 0 } }, punktSel === p.id ? "\u2713 Wybrany" : "Poka\u017C ten punkt"),
+                React.createElement("button", { disabled: busy, onClick: () => { if (window.confirm("Ukry\u0107 punkt \u201E" + p.nazwa + "\u201D? Dane zostaj\u0105 w bazie.")) archive(p.id); }, style: { ...btnGhost, width: "auto", marginTop: 0, padding: "0 14px", color: "var(--red)", borderColor: "rgba(220,38,38,.3)" } }, "Ukryj")))),
+        React.createElement("div", { style: sectionTitle }, "Dodaj punkt"),
+        React.createElement("input", { style: inputStyle, value: nazwa, onChange: (e) => setNazwa(e.target.value), placeholder: "Nazwa, np. Punkt Kartuzy" }),
+        React.createElement("input", { style: { ...inputStyle, marginTop: 8 }, value: adres, onChange: (e) => setAdres(e.target.value), placeholder: "Adres (opcjonalnie)" }),
+        React.createElement("button", { disabled: busy || !nazwa.trim(), onClick: add, style: { ...btnCopper, marginTop: 10, opacity: busy || !nazwa.trim() ? .6 : 1 } }, React.createElement(Plus, { size: 18 }), " Dodaj punkt"),
+        punkty.length > 0 && React.createElement(React.Fragment, null,
+            React.createElement("div", { style: sectionTitle }, "Kto gdzie pracuje"),
+            staff.length === 0 && React.createElement("div", { style: { fontSize: 14, color: "var(--muted)" } }, "Brak pracownik\u00F3w."),
+            staff.map((u) => React.createElement("div", { key: u.id, style: { display: "flex", alignItems: "center", gap: 10, padding: "10px 2px", borderBottom: "1px solid var(--line)" } },
+                React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 14.5, fontWeight: 700 } }, u.name),
+                    React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)" } }, ROLE_LABEL[u.role] || u.role)),
+                React.createElement("select", { disabled: busy, value: u.punkt || "", onChange: (e) => assign(u, e.target.value), style: { ...inputStyle, width: 170, marginTop: 0 } },
+                    React.createElement("option", { value: "" }, "Wszystkie punkty"),
+                    punkty.map((p) => React.createElement("option", { key: p.id, value: p.id }, p.nazwa))))),
+            React.createElement("div", { style: { fontSize: 13, color: "var(--faint)", marginTop: 10, lineHeight: 1.5 } }, "Zmiana obowi\u0105zuje po ponownym zalogowaniu pracownika.")));
 }
 /* ─────────── Odbiorcy: huty / pośrednicy z własnymi cenami ─────────── */
 function OdbiorcyPanel({ buyers, setBuyers, materials, onClose }) {
