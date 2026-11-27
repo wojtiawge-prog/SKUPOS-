@@ -774,6 +774,12 @@ export default function App() {
     } setSession(null); setMode("operator"); setTab("home"); };
     const enableNotif = async () => { const p = await askNotifPermission(); setSettings((s) => ({ ...s, notif: p === "granted" })); };
     if (!currentUser) {
+        // Tryb chmury: lokalny ekran logowania (login/hasło z pamięci telefonu) nie ma tu sensu —
+        // sesja się rozjechała, więc wracamy do prawdziwego logowania e-mailem.
+        if (typeof window !== "undefined" && window.__cloudLogout)
+            return (React.createElement("div", { style: rootBase },
+                React.createElement("style", null, CSS),
+                React.createElement(CloudRelogin, null)));
         return (React.createElement("div", { style: rootBase },
             React.createElement("style", null, CSS),
             React.createElement(Login, { users: users, onLogin: (id) => setSession(id) })));
@@ -2385,6 +2391,10 @@ function Magazyn({ materials, stock, mm, dispatch, setDispatch, buyers = [], set
             React.createElement("button", { style: { ...btnCopper, marginTop: 16 }, onClick: addDispatch },
                 React.createElement(Truck, { size: 18 }),
                 " Zatwierd\u017A wydanie"))));
+}
+function CloudRelogin() {
+    useEffect(() => { const t = setTimeout(() => { try { window.__cloudLogout(); } catch (e) { location.reload(); } }, 400); return () => clearTimeout(t); }, []);
+    return React.createElement("div", { style: { minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 15 } }, "Od\u015Bwie\u017Cam logowanie\u2026");
 }
 /* ─────────── Punkty skupu ─────────── */
 function PunktSwitch({ punkty, value, onChange }) {
