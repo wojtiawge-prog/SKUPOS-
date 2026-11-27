@@ -51,8 +51,14 @@ export async function loadAll(sb) {
     all(() => sb.from("pozycje").select("*")),
     all(() => sb.from("wydania").select("*")),
   ]);
+  // ceny sprzedaży są w osobnej tabeli widocznej tylko dla właściciela/księgowej (RLS); reszta dostaje pustą listę
+  let ceny = [];
+  try { ceny = await all(() => sb.from("ceny_prywatne").select("id,cena")); } catch (e) { ceny = []; }
+  const cenaById = {}; ceny.forEach((c) => { cenaById[c.id] = +c.cena; });
   const appIdByMatId = {}, grupaByMatId = {}; cennik.forEach((c) => { appIdByMatId[c.id] = c.app_id || c.id; grupaByMatId[c.id] = c.grupa; });
-  return { materials: cennik.filter((c) => c.aktywny !== false).map(rowToMat), tx: rowsToTx(tx, poz, klienci, appIdByMatId, grupaByMatId), dispatch: wyd.map((r) => rowToDisp(r, appIdByMatId)) };
+  const cennikP = cennik.map((c) => (cenaById[c.id] != null ? { ...c, cena_sprzedaz: cenaById[c.id] } : c));
+  const wydP = wyd.map((r) => (cenaById[r.id] != null ? { ...r, cena: cenaById[r.id] } : r));
+  return { materials: cennikP.filter((c) => c.aktywny !== false).map(rowToMat), tx: rowsToTx(tx, poz, klienci, appIdByMatId, grupaByMatId), dispatch: wydP.map((r) => rowToDisp(r, appIdByMatId)) };
 }
 
 // ── zdjęcie dowodu → prywatny Storage „dowody/<firma>/<przyjęcie>/…”, wpis w tabeli zdjecia ──
