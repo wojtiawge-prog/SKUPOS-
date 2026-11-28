@@ -2,7 +2,7 @@
 // Włączana przełącznikiem window.SKUPOS_DB = "tables" (config.js). Bez przełącznika nic się nie zmienia.
 // Aplikacja dalej pracuje na swoich kluczach (sk_mat_v2, sk_tx_v2, sk_disp_v2); ten moduł tłumaczy je na wiersze.
 
-const r2 = (n) => Math.round((+n || 0) * 100) / 100;
+const r2 = (n) => Math.round(((+n || 0) + Number.EPSILON) * 100) / 100;
 const r1 = (n) => Math.round((+n || 0) * 10) / 10;
 
 // ── klucz klienta: firma po NIP, osoba po numerze dowodu (fallback: nazwisko + adres) ──
@@ -18,7 +18,7 @@ export const klientToRow = (t, firma_id) => t.firma
   : { firma_id, app_id: klientKey(t), typ: "osoba", imie: (t.osoba || {}).imie || "", nazwisko: (t.osoba || {}).nazwisko || "", adres: (t.osoba || {}).adres || "", dowod_nr: (t.osoba || {}).dowod || null, rejestracje: t.plate ? [t.plate] : [] };
 
 export const txToRows = (t, firma_id, klient_id, matIdByApp) => ({
-  tx: { firma_id, app_id: t.id, ...(t.punkt ? { punkt_id: t.punkt } : {}), nr: t.no || null, rodzaj: t.kind === "KPO" ? "KPO" : "FPO", klient_id, rejestracja: t.plate || null, platnosc: ["gotowka", "przelew", "blik"].includes(t.payment) ? t.payment : "gotowka", pochodzenie: t.zrodlo || null, produkt: t.produkt || null, uwagi: t.uwagi || null, oswiadczenie: !!(t.osw || t.kind === "KPO"), suma: r2((t.pos || []).reduce((a, p) => a + p.w * p.price, 0)), masa: r1((t.pos || []).reduce((a, p) => a + (+p.w || 0), 0)), created_at: new Date(t.ts).toISOString() },
+  tx: { firma_id, app_id: t.id, ...(t.punkt ? { punkt_id: t.punkt } : {}), nr: t.no || null, rodzaj: t.kind === "KPO" ? "KPO" : "FPO", klient_id, rejestracja: t.plate || null, platnosc: ["gotowka", "przelew", "blik"].includes(t.payment) ? t.payment : "gotowka", pochodzenie: t.zrodlo || null, produkt: t.produkt || null, uwagi: t.uwagi || null, oswiadczenie: !!(t.osw || t.kind === "KPO"), suma: r2((t.pos || []).reduce((a, p) => a + r2((+p.w || 0) * (+p.price || 0)), 0)), masa: r1((t.pos || []).reduce((a, p) => a + (+p.w || 0), 0)), created_at: new Date(t.ts).toISOString() },
   pozycje: (t.pos || []).filter((p) => +p.w > 0).map((p) => ({ firma_id, towar_id: matIdByApp[p.matId] || null, nazwa: p.n, masa: r1(p.w), cena: r2(p.price) })),
 });
 

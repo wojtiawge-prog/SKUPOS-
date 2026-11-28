@@ -122,20 +122,29 @@ const seedTx = () => {
             pos: [{ matId: "m_fe2", n: "Złom ciężki (gruby)", g: "FE", w: 510, price: 1.35 }, { matId: "m_ss1", n: "Nierdzewka 18/8 (304)", g: "SS", w: 12, price: 5.50 }] },
     ];
 };
-const txTotal = (tx) => tx.pos.reduce((a, p) => a + p.w * p.price, 0);
-const txMass = (tx) => tx.pos.reduce((a, p) => a + p.w, 0);
+/* ── Pieniądze liczone w groszach: każda pozycja zaokrąglona do 0,01 zł, suma = suma pozycji (jak na dokumencie) ── */
+const r2 = (x) => Math.round(((+x || 0) + Number.EPSILON) * 100) / 100;
+const lineVal = (p) => r2((+p.w || 0) * (+p.price || 0));
+const txTotal = (tx) => r2((tx.pos || []).reduce((a, p) => a + lineVal(p), 0));
+const txMass = (tx) => (tx.pos || []).reduce((a, p) => a + (+p.w || 0), 0);
+/* ── PCC od zakupu od osoby fizycznej (FPO): 2%, zwolnienie gdy wartość ≤ progu. Próg 1000 zł → 3000 zł od 3.11.2026 (Dz.U. 2026 poz. 1354). Podstawa i podatek zaokrąglane do pełnych złotych (Ordynacja podatkowa art. 63). ── */
+const PCC_RATE = 0.02;
+const dayKeyOf = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const pccProg = (ts) => (dayKeyOf(ts) >= "2026-11-03" ? 3000 : 1000);
+const pccOf = (tx) => { if (!tx || tx.kind !== "FPO") return 0; const v = txTotal(tx); return v > pccProg(tx.ts) ? Math.round(Math.round(v) * PCC_RATE) : 0; };
 /* ── JEDNO miejsce liczenia wyniku: skup = wydatek, przychód = sprzedaż do huty, marża = sprzedaż − koszt sprzedanego towaru ── */
 const calcWynik = (tx, dispatch, materials, keyOk) => {
     const mm = {}; (materials || []).forEach((m) => { mm[m.id] = m; });
     const agg = {};
-    (tx || []).forEach((t) => (t.pos || []).forEach((p) => { const a = agg[p.matId] || (agg[p.matId] = { w: 0, v: 0 }); a.w += +p.w || 0; a.v += (+p.w || 0) * (+p.price || 0); }));
+    (tx || []).forEach((t) => (t.pos || []).forEach((p) => { const a = agg[p.matId] || (agg[p.matId] = { w: 0, v: 0 }); a.w += +p.w || 0; a.v += lineVal(p); }));
     const avgBuy = (id) => { const a = agg[id]; return a && a.w > 0 ? a.v / a.w : ((mm[id] || {}).buy || 0); };
     const day = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
     const txs = (tx || []).filter((t) => keyOk(day(t.ts)));
     const skup = txs.reduce((a, t) => a + txTotal(t), 0), masa = txs.reduce((a, t) => a + txMass(t), 0);
     let sprzedaz = 0, koszt = 0, sprzMasa = 0;
-    (dispatch || []).filter((d) => keyOk(d.dateKey || day(d.ts))).forEach((d) => { const w = +d.w || 0; const price = d.price != null ? +d.price : ((mm[d.matId] || {}).sell || 0); sprzedaz += w * price; koszt += w * avgBuy(d.matId); sprzMasa += w; });
-    return { skup, masa, sprzedaz, koszt, marza: sprzedaz - koszt, sprzMasa, n: txs.length };
+    (dispatch || []).filter((d) => keyOk(d.dateKey || day(d.ts))).forEach((d) => { const w = +d.w || 0; const price = d.price != null ? +d.price : ((mm[d.matId] || {}).sell || 0); sprzedaz += r2(w * price); koszt += w * avgBuy(d.matId); sprzMasa += w; });
+    koszt = r2(koszt); sprzedaz = r2(sprzedaz);
+    return { skup: r2(skup), masa, sprzedaz, koszt, marza: r2(sprzedaz - koszt), naMagazyn: r2(skup - koszt), sprzMasa, n: txs.length };
 };
 const supplierName = (tx) => tx.kind === "FPO" ? `${tx.osoba.imie} ${tx.osoba.nazwisko}` : tx.firma.nazwa;
 const PAY = { gotowka: { label: "Gotówka", icon: Banknote }, przelew: { label: "Przelew", icon: CreditCard }, blik: { label: "BLIK", icon: Wallet } };
@@ -640,18 +649,18 @@ export default function App() {
     const mm = useMemo(() => matMap(materials), [materials]);
     const stock = useMemo(() => {
         const s = {};
-        materials.forEach((m) => { s[m.id] = m.stock; });
-        tx.forEach((t) => t.pos.forEach((p) => { s[p.matId] = (s[p.matId] || 0) + p.w; }));
-        dispatch.forEach((d) => { s[d.matId] = (s[d.matId] || 0) - d.w; });
+        if (!punktOk) materials.forEach((m) => { s[m.id] = +m.stock || 0; });
+        tx.forEach((t) => t.pos.forEach((p) => { s[p.matId] = (s[p.matId] || 0) + (+p.w || 0); }));
+        dispatch.forEach((d) => { s[d.matId] = (s[d.matId] || 0) - (+d.w || 0); });
         return s;
-    }, [materials, tx, dispatch]);
+    }, [materials, tx, dispatch, punktOk]);
     const buildReport = (dayKey) => {
         const list = tx.filter((x) => fmtDateKey(x.ts) === dayKey);
         const disp = dispatch.filter((d) => d.dateKey === dayKey);
         const byMat = {};
         let totMass = 0, totVal = 0;
         list.forEach((x) => x.pos.forEach((p) => { if (!byMat[p.n])
-            byMat[p.n] = { w: 0, v: 0, g: p.g }; byMat[p.n].w += p.w; byMat[p.n].v += p.w * p.price; totMass += p.w; totVal += p.w * p.price; }));
+            byMat[p.n] = { w: 0, v: 0, g: p.g }; byMat[p.n].w += +p.w || 0; byMat[p.n].v += lineVal(p); totMass += +p.w || 0; totVal += lineVal(p); }));
         const sumPay = (k) => list.filter((x) => x.payment === k).reduce((a, x) => a + txTotal(x), 0);
         const r1 = (x) => Math.round(x * 10) / 10;
         let t = "";
@@ -853,7 +862,7 @@ export default function App() {
                 activeTab === "mkt" && can("marketing") && React.createElement(Marketing, { requests, materials, campaigns, setCampaigns, tx, company }),
                 activeTab === "wyw" && can("pickups") && React.createElement(Wywozy, { pickups, setPickups }),
                 activeTab === "ksieg" && can("accounting") && React.createElement(Ksiegowosc, { tx, dispatch, materials, stock, company }),
-                activeTab === "ai" && (can("marketing") || can("accounting")) && React.createElement(DoradcaBiznesowy, { materials, company, tx }),
+                activeTab === "ai" && (can("marketing") || can("accounting")) && React.createElement(DoradcaBiznesowy, { materials: materials.map((m) => ({ ...m, stock: stock[m.id] ?? 0 })), company, tx }),
                 activeTab === "nadzorca" && (can("marketing") || can("accounting")) && React.createElement(NadzorcaAI, { tx: tx, materials: materials }),
                 activeTab === "social" && can("marketing") && React.createElement(SocialAuto, { materials: materials, company: company }),
                 activeTab === "konkur" && can("cennikView") && React.createElement(KonkurencjaView, { materials: materials }),
@@ -959,7 +968,7 @@ function KopiaDziennik({ tx, materials, stock, dispatch }) {
     const log = (() => { try { return JSON.parse(localStorage.getItem("sk_audit_v1") || "[]"); } catch (e) { return []; } })();
     const shown = log.filter((e) => !filter || (e.a + " " + e.d + " " + e.who).toLowerCase().includes(filter.toLowerCase())).slice(0, 300);
     const matN = (id) => ((materials || []).find((m) => m.id === id) || {}).n || id;
-    const expTx = () => { const rows = []; (tx || []).slice().sort((a, b) => a.ts - b.ts).forEach((t) => (t.pos || []).forEach((p) => rows.push([t.no, new Date(t.ts).toLocaleString("pl-PL"), t.kind, t.osoba ? `${t.osoba.imie || ""} ${t.osoba.nazwisko || ""}`.trim() : (t.firma ? t.firma.nazwa : ""), t.firma ? t.firma.nip : "", t.plate || "", p.n, numPL(p.w, 1), numPL(p.price), numPL(p.w * p.price), t.payment || ""]))); csvDownload(`SkupOS_przyjecia_${today}.csv`, ["Nr dokumentu", "Data", "Rodzaj", "Klient", "NIP", "Rejestracja", "Towar", "Masa kg", "Cena zł/kg", "Wartość zł", "Płatność"], rows); setMsg(`Pobrano ${rows.length} pozycji przyjęć.`); };
+    const expTx = () => { const rows = []; (tx || []).slice().sort((a, b) => a.ts - b.ts).forEach((t) => (t.pos || []).forEach((p) => rows.push([t.no, new Date(t.ts).toLocaleString("pl-PL"), t.kind, t.osoba ? `${t.osoba.imie || ""} ${t.osoba.nazwisko || ""}`.trim() : (t.firma ? t.firma.nazwa : ""), t.firma ? t.firma.nip : "", t.plate || "", p.n, numPL(p.w, 1), numPL(p.price), numPL(lineVal(p)), t.payment || ""]))); csvDownload(`SkupOS_przyjecia_${today}.csv`, ["Nr dokumentu", "Data", "Rodzaj", "Klient", "NIP", "Rejestracja", "Towar", "Masa kg", "Cena zł/kg", "Wartość zł", "Płatność"], rows); setMsg(`Pobrano ${rows.length} pozycji przyjęć.`); };
     const expKlienci = () => { const by = {}; (tx || []).forEach((t) => { const k = t.firma ? "F:" + (t.firma.nip || t.firma.nazwa) : "O:" + ((t.osoba && t.osoba.dowod) || (t.osoba && t.osoba.nazwisko) || t.plate); const r = by[k] || (by[k] = { n: t.firma ? t.firma.nazwa : `${(t.osoba || {}).imie || ""} ${(t.osoba || {}).nazwisko || ""}`.trim(), typ: t.firma ? "Firma" : "Osoba", nip: t.firma ? t.firma.nip : "", plate: t.plate || "", wiz: 0, kg: 0, zl: 0, last: 0 }); r.wiz++; r.kg += txMass(t); r.zl += txTotal(t); r.last = Math.max(r.last, t.ts); }); const rows = Object.values(by).sort((a, b) => b.zl - a.zl).map((r) => [r.n, r.typ, r.nip, r.plate, r.wiz, numPL(r.kg, 1), numPL(r.zl), new Date(r.last).toLocaleDateString("pl-PL")]); csvDownload(`SkupOS_klienci_${today}.csv`, ["Klient", "Typ", "NIP", "Ostatnia rejestracja", "Wizyty", "Masa kg", "Wartość zł", "Ostatnia wizyta"], rows); setMsg(`Pobrano ${rows.length} klientów.`); };
     const expMag = () => { const rows = (materials || []).map((m) => [m.n, m.g, numPL(stock[m.id] || 0, 1), numPL(m.buy), numPL(m.sell), numPL((stock[m.id] || 0) * m.buy), numPL((stock[m.id] || 0) * (m.sell || 0))]); csvDownload(`SkupOS_magazyn_${today}.csv`, ["Towar", "Grupa", "Stan kg", "Cena skupu", "Cena sprzedaży", "Wartość (skup)", "Wartość (sprzedaż)"], rows); setMsg(`Pobrano stan ${rows.length} towarów.`); };
     const expWyd = () => { const rows = (dispatch || []).slice().sort((a, b) => a.ts - b.ts).map((d) => [d.dateKey, matN(d.matId), numPL(d.w, 1), d.contractor || ""]); csvDownload(`SkupOS_wydania_${today}.csv`, ["Data", "Towar", "Masa kg", "Odbiorca"], rows); setMsg(`Pobrano ${rows.length} wydań.`); };
@@ -1047,7 +1056,7 @@ function Pulpit({ tx, dispatch, mm, materials, stock, company, setCompany, openI
     const ctrlColor = (d) => d < 0 ? "var(--red)" : d <= 7 ? "var(--amber)" : "var(--green)";
     // struktura skupu dziś wg grupy materiału (wartość)
     const byGroup = {};
-    todayList.forEach((x) => x.pos.forEach((p) => { byGroup[p.g] = (byGroup[p.g] || 0) + p.w * p.price; }));
+    todayList.forEach((x) => x.pos.forEach((p) => { byGroup[p.g] = (byGroup[p.g] || 0) + lineVal(p); }));
     const groups = Object.entries(byGroup).sort((a, b) => b[1] - a[1]);
     const maxG = groups.length ? groups[0][1] : 1;
     const magValue = materials.reduce((a, m) => a + (stock[m.id] || 0) * m.buy, 0);
@@ -1108,10 +1117,12 @@ function Pulpit({ tx, dispatch, mm, materials, stock, company, setCompany, openI
                 React.createElement("div", { style: sectionTitle }, "Ten miesi\u0105c \u2014 ile zarabiam"),
                 React.createElement(Card, { onClick: () => setTab("ksieg"), style: { cursor: "pointer" } },
                     React.createElement("div", { style: { display: "flex", gap: 10 } },
-                        cell("Skup", W.skup),
-                        cell("Sprzeda\u017C", W.sprzedaz),
-                        cell("Mar\u017Ca", W.marza, W.marza >= 0 ? "var(--green)" : "var(--red)")),
-                    React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", marginTop: 10 } }, W.sprzMasa > 0 ? `Sprzedane ${kg(W.sprzMasa)} do huty · szczegóły w „Papiery i podatki” →` : "Brak sprzedaży do huty w tym miesiącu — dodaj wydanie w Magazynie")));
+                        cell("Wydane na skup", W.skup),
+                        cell("Sprzeda\u017C do huty", W.sprzedaz),
+                        cell("Mar\u017Ca na sprzedanym", W.marza, W.marza >= 0 ? "var(--green)" : "var(--red)")),
+                    React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", marginTop: 10, lineHeight: 1.5 } }, W.sprzMasa > 0 ? `Sprzedane ${kg(W.sprzMasa)}: ${pln(W.sprzedaz)} − koszt tego towaru ${pln(W.koszt)} (średnia cena skupu) = marża.` : "Brak sprzedaży do huty w tym miesiącu — dodaj wydanie w Magazynie"),
+                    W.naMagazyn !== 0 && React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", marginTop: 4, lineHeight: 1.5 } }, W.naMagazyn > 0 ? `Kupione, a jeszcze niesprzedane: ${pln(W.naMagazyn)} — leży na placu, zarobisz na tym przy sprzedaży.` : `Sprzedano więcej, niż skupiono w tym miesiącu: ${pln(-W.naMagazyn)} z wcześniejszych zapasów.`),
+                    React.createElement("div", { style: { fontSize: 12.5, color: "var(--faint)", marginTop: 6 } }, "Szczegóły w „Papiery i podatki” →")));
         })(),
         React.createElement("div", { style: sectionTitle }, "Struktura skupu \u2014 dzi\u015B"),
         React.createElement(Card, null, groups.length === 0 ? React.createElement("div", { style: { color: "var(--muted)", fontSize: 15, padding: "8px 2px" } }, "Brak przyj\u0119\u0107 dzisiaj. Dodaj pierwsze \u2193") :
@@ -1650,7 +1661,7 @@ Odpowiedz WYŁĄCZNIE czystym JSON (tablica): [{"metal":"nazwa","kierunek":"w g�
     };
     // Analiza marży każdego materiału
     const analiza = (materials || []).map(m => {
-        const marza = m.buy > 0 ? ((m.sell - m.buy) / m.buy) * 100 : 0;
+        const marza = m.sell > 0 ? ((m.sell - m.buy) / m.sell) * 100 : 0; // marża = (sprzedaż − zakup) / sprzedaż (jak wszędzie w aplikacji)
         const marzaKg = m.sell - m.buy;
         let poziom = "dobry";
         if (marza < progi.min)
@@ -1659,7 +1670,7 @@ Odpowiedz WYŁĄCZNIE czystym JSON (tablica): [{"metal":"nazwa","kierunek":"w g�
             poziom = "ostrzezenie";
         else if (marza < progi.dobry)
             poziom = "ok";
-        return { ...m, marza, marzaKg, poziom, stockVal: (stock?.[m.id] || m.stock || 0) * m.buy };
+        return { ...m, marza, marzaKg, poziom, stockVal: (stock?.[m.id] ?? m.stock ?? 0) * m.buy };
     });
     const krytyczne = analiza.filter(a => a.poziom === "krytyczny").sort((a, b) => a.marza - b.marza);
     const ostrzezenia = analiza.filter(a => a.poziom === "ostrzezenie").sort((a, b) => a.marza - b.marza);
@@ -2078,7 +2089,7 @@ function Cennik({ materials, setMaterials, canEdit = true, company, showMargin =
                     codeChip(g),
                     React.createElement("span", { style: { fontFamily: "var(--display)", fontSize: 14.5, fontWeight: 700, color: "var(--muted)" } }, C[g].label)),
                 React.createElement(Card, { pad: 4 }, items.map((m, i) => {
-                    const marza = m.buy ? ((m.sell - m.buy) / m.buy) * 100 : 0;
+                    const marza = m.sell ? ((m.sell - m.buy) / m.sell) * 100 : 0;
                     return (React.createElement("div", { key: m.id, onClick: () => open(m), style: { display: "flex", alignItems: "center", padding: "12px 10px", cursor: canEdit ? "pointer" : "default", borderBottom: i < items.length - 1 ? "1px solid var(--line)" : "none" } },
                         React.createElement("span", { style: { flex: 1, fontSize: 14, fontWeight: 600, paddingRight: 8 } }, m.n),
                         React.createElement("span", { style: { width: 74, textAlign: "right", fontFamily: "var(--mono)", fontSize: 15, fontWeight: 700 } }, m.buy.toFixed(2)),
@@ -2491,7 +2502,7 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
     const [result, setResult] = useState(null);
     const [err, setErr] = useState("");
     const numI = (x) => { const n = parseFloat(x); return isNaN(n) ? 0 : n; };
-    const total = pos.reduce((a, p) => a + numI(p.w) * numI(p.price), 0);
+    const total = r2(pos.reduce((a, p) => a + r2(numI(p.w) * numI(p.price)), 0));
     const mass = pos.reduce((a, p) => a + numI(p.w), 0);
     // ── Stały klient: rozpoznanie po tablicy rejestracyjnej ──
     const [prevUsed, setPrevUsed] = useState("");
@@ -2665,7 +2676,7 @@ function Intake({ materials, mm, company, onClose, commitIntake, tx }) {
                             React.createElement("input", { style: { ...inputStyle, fontFamily: "var(--mono)", fontWeight: 700, fontSize: 17, padding: "11px 12px" }, type: "number", inputMode: "decimal", value: p.price, placeholder: "0", onChange: (e) => upd(p.rid, { price: e.target.value }) }))),
                     React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 11, paddingTop: 10, borderTop: "1px solid var(--line)" } },
                         React.createElement("span", { style: { fontSize: 13.5, color: "var(--muted)" } }, "Warto\u015B\u0107 pozycji"),
-                        React.createElement("span", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 16, color: "var(--copper)" } }, pln(p.w * p.price)))));
+                        React.createElement("span", { style: { fontFamily: "var(--mono)", fontWeight: 700, fontSize: 16, color: "var(--copper)" } }, pln(lineVal(p))))));
             }),
             topMats.length > 0 && (React.createElement("div", { style: { marginBottom: 10 } },
                 React.createElement("div", { style: { fontSize: 13, color: "var(--muted)", fontWeight: 700, marginBottom: 7 } }, "Najcz\u0119\u015Bciej skupowane \u2014 dotknij, aby doda\u0107"),
@@ -2765,7 +2776,7 @@ function FpoEgzemplarz({ tx, company, dla, waska }) {
     const cell = { border: "1px solid #000", padding: waska ? "3px 4px" : "5px 6px", fontSize: fs, verticalAlign: "top", textAlign: "left" };
     const lab = { fontSize: waska ? 9 : 9.5, color: "#333", display: "block", marginBottom: 1 };
     const sumKg = tx.pos.reduce((a, p) => a + (+p.w || 0), 0);
-    const sumZl = tx.pos.reduce((a, p) => a + (+p.w || 0) * (+p.price || 0), 0);
+    const sumZl = txTotal(tx);
     const prod = (p) => p.produkt || tx.produkt || "—";
     const sekcja = (t) => React.createElement("div", { style: { fontWeight: 800, fontSize: fs, margin: waska ? "7px 0 3px" : "10px 0 4px" } }, t);
     return React.createElement("div", { className: "fpo-egz", style: { color: "#000", background: "#fff", fontFamily: "Arial, Helvetica, sans-serif", width: waska ? "76mm" : "auto" } },
@@ -2788,7 +2799,7 @@ function FpoEgzemplarz({ tx, company, dla, waska }) {
                 tx.pos.map((p, i) => React.createElement("tr", { key: i }, React.createElement("td", { style: cell },
                     React.createElement("div", null, React.createElement("b", null, C[p.g].code), " · ", C[p.g].label),
                     React.createElement("div", null, "Produkt: ", prod(p)),
-                    React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, React.createElement("span", null, "Masa: ", mgFmt(p.w), " Mg"), React.createElement("span", null, "Wartość: ", zlFmt(p.w * p.price), " zł"))))),
+                    React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, React.createElement("span", null, "Masa: ", mgFmt(p.w), " Mg"), React.createElement("span", null, "Wartość: ", zlFmt(lineVal(p)), " zł"))))),
                 React.createElement("tr", null, React.createElement("td", { style: { ...cell, fontWeight: 800 } }, React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, React.createElement("span", null, "Suma: ", mgFmt(sumKg), " Mg"), React.createElement("span", null, zlFmt(sumZl), " zł"))))))
             : React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", marginTop: 6 } },
                 React.createElement("thead", null, React.createElement("tr", null, ["Kod odpadów", "Rodzaj odpadów", "Rodzaj produktu, z którego powstały odpady", "Masa odpadów [Mg]", "Wartość odpadów [zł]"].map((h) => React.createElement("th", { key: h, style: { ...cell, fontSize: 9.5, fontWeight: 700, background: "#f2f2f2" } }, h)))),
@@ -2798,7 +2809,7 @@ function FpoEgzemplarz({ tx, company, dla, waska }) {
                         React.createElement("td", { style: cell }, C[p.g].label + (p.n && p.n !== C[p.g].label ? " (" + p.n + ")" : "")),
                         React.createElement("td", { style: cell }, prod(p)),
                         React.createElement("td", { style: { ...cell, textAlign: "right", whiteSpace: "nowrap" } }, mgFmt(p.w)),
-                        React.createElement("td", { style: { ...cell, textAlign: "right", whiteSpace: "nowrap" } }, zlFmt(p.w * p.price)))),
+                        React.createElement("td", { style: { ...cell, textAlign: "right", whiteSpace: "nowrap" } }, zlFmt(lineVal(p))))),
                     React.createElement("tr", null,
                         React.createElement("td", { style: { ...cell, fontWeight: 800, textAlign: "right" }, colSpan: 3 }, "Suma"),
                         React.createElement("td", { style: { ...cell, fontWeight: 800, textAlign: "right" } }, mgFmt(sumKg)),
@@ -2915,7 +2926,7 @@ function DocOverlay({ tx, company, onClose, onNew, created, onDelete }) {
                         React.createElement("span", { style: { flex: 1, fontWeight: 600 } }, p.n),
                         React.createElement("span", { style: { width: 52, textAlign: "right", fontFamily: "var(--mono)" } }, p.w),
                         React.createElement("span", { style: { width: 50, textAlign: "right", fontFamily: "var(--mono)", color: "var(--muted)" } }, p.price.toFixed(2)),
-                        React.createElement("span", { style: { width: 62, textAlign: "right", fontFamily: "var(--mono)", fontWeight: 700 } }, Math.round(p.w * p.price)))))),
+                        React.createElement("span", { style: { width: 62, textAlign: "right", fontFamily: "var(--mono)", fontWeight: 700 } }, Math.round(lineVal(p))))))),
                 React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: "2px solid var(--text)" } },
                     React.createElement("div", null,
                         React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)" } }, "Razem masa \u00B7 p\u0142atno\u015B\u0107"),
@@ -3377,7 +3388,7 @@ function NadzorcaAI({ tx, materials }) {
     const alerts = useMemo(() => {
         const a = [];
         txx.forEach((t) => {
-            const total = (t.pos || []).reduce((s, p) => s + p.w * p.price, 0);
+            const total = txTotal(t);
             const sup = t.firma ? t.firma.nazwa : (t.osoba ? `${t.osoba.imie} ${t.osoba.nazwisko}` : "—");
             const when = new Date(t.ts).toLocaleDateString("pl-PL");
             (t.pos || []).forEach((p) => {
@@ -3394,8 +3405,10 @@ function NadzorcaAI({ tx, materials }) {
                 if (p.w > 3000)
                     a.push({ sev: "amber", kat: "Waga", txt: `Duży pojedynczy ładunek: ${Math.round(p.w).toLocaleString("pl-PL")} kg „${p.n}". Zweryfikuj wagę i dokumentację.`, meta: `${sup} · ${when}` });
             });
-            if (t.payment === "gotowka" && total > 10000)
-                a.push({ sev: "amber", kat: "Gotówka", txt: `Płatność gotówką ${z(total)} — przy wysokich kwotach pamiętaj o limicie i dokumentacji.`, meta: `${sup} · ${when}` });
+            if (t.payment === "gotowka" && t.firma && total > 15000)
+                a.push({ sev: "red", kat: "Gotówka", txt: `Płatność gotówką ${z(total)} firmie — powyżej limitu 15 000 zł dla płatności między przedsiębiorcami (trzeba przelewem). Wydatku ponad limit nie wliczysz w koszty.`, meta: `${sup} · ${when}` });
+            else if (t.payment === "gotowka" && total > 10000)
+                a.push({ sev: "amber", kat: "Gotówka", txt: `Płatność gotówką ${z(total)} — przy wysokich kwotach pilnuj dokumentacji (od osób prywatnych limitu nie ma, między firmami 15 000 zł).`, meta: `${sup} · ${when}` });
         });
         return a;
     }, [txx, mats]);
@@ -3405,7 +3418,7 @@ function NadzorcaAI({ tx, materials }) {
         setAiBusy(true);
         setAiOut(null);
         try {
-            const sample = txx.slice(0, 60).map((t) => { const tot = (t.pos || []).reduce((s, p) => s + p.w * p.price, 0); return `${new Date(t.ts).toLocaleDateString("pl-PL")} ${t.kind} ${Math.round(tot)}zł: ` + (t.pos || []).map((p) => `${p.n} ${p.w}kg@${p.price}`).join("; "); }).join("\n");
+            const sample = txx.slice(0, 60).map((t) => { const tot = txTotal(t); return `${new Date(t.ts).toLocaleDateString("pl-PL")} ${t.kind} ${Math.round(tot)}zł: ` + (t.pos || []).map((p) => `${p.n} ${p.w}kg@${p.price}`).join("; "); }).join("\n");
             const cennik = mats.slice(0, 14).map((m) => `${m.n}: skup ${m.buy} / sprzedaż ${m.sell || "-"}`).join("; ");
             const sys = "Jesteś doświadczonym audytorem i nadzorcą skupu złomu. Przeanalizuj transakcje pod kątem nieprawidłowości: zawyżone/zaniżone ceny vs cennik, transakcje ze stratą, podejrzanie duże ładunki, wzorce mogące świadczyć o błędach lub nadużyciach pracowników, ryzyka podatkowe (duża gotówka). Zwróć zwięzły raport po polsku: 3-6 najważniejszych obserwacji i konkretne zalecenia dla właściciela. Rzeczowo.";
             const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1200, system: sys, messages: [{ role: "user", content: `CENNIK: ${cennik}\n\nTRANSAKCJE:\n${sample}\n\nDaj raport nadzorczy.` }] }) });
@@ -3540,7 +3553,7 @@ function DorAnaliza({ tx, materials, akcent }) {
     const txx = tx || [];
     const mats = materials || [];
     const z = (n) => Math.round(n).toLocaleString("pl-PL") + " zł";
-    const txVal = (t) => (t.pos || []).reduce((a, p) => a + p.w * p.price, 0);
+    const txVal = (t) => txTotal(t);
     const total = txx.reduce((a, t) => a + txVal(t), 0);
     const now = new Date();
     const ym = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -3548,7 +3561,7 @@ function DorAnaliza({ tx, materials, akcent }) {
     const sumM = (m) => txx.filter((t) => ym(new Date(t.ts)) === m).reduce((a, t) => a + txVal(t), 0);
     const cur = sumM(ym(now)), prv = sumM(ym(prev));
     const byMat = {};
-    txx.forEach((t) => (t.pos || []).forEach((p) => { byMat[p.n] = byMat[p.n] || { val: 0, w: 0 }; byMat[p.n].val += p.w * p.price; byMat[p.n].w += p.w; }));
+    txx.forEach((t) => (t.pos || []).forEach((p) => { byMat[p.n] = byMat[p.n] || { val: 0, w: 0 }; byMat[p.n].val += lineVal(p); byMat[p.n].w += p.w; }));
     const topMat = Object.entries(byMat).sort((a, b) => b[1].val - a[1].val).slice(0, 5);
     const cash = txx.filter((t) => t.payment === "gotowka").reduce((a, t) => a + txVal(t), 0);
     const cashPct = total > 0 ? Math.round(cash / total * 100) : 0;
@@ -3637,7 +3650,7 @@ function dorKontekst(tx, materials, firma) {
     const txx = tx || [];
     const mats = materials || [];
     const fz = (n) => Math.round(n).toLocaleString("pl-PL");
-    const txVal = (t) => (t.pos || []).reduce((a, p) => a + p.w * p.price, 0);
+    const txVal = (t) => txTotal(t);
     const cenyLista = mats.filter((m) => m.buy > 0).slice(0, 12).map((m) => `${m.n} ${m.buy.toFixed(2)}`).join(", ");
     if (txx.length === 0) {
         return `CENNIK SKUPU (zł/kg): ${cenyLista || "brak"}.\nUWAGA: brak transakcji w systemie — doradzaj na podstawie cennika i ogólnej wiedzy o branży, zachęć do rozpoczęcia ewidencji.`;
@@ -3653,7 +3666,7 @@ function dorKontekst(tx, materials, firma) {
     const dni = Math.max(1, Math.round((ds[ds.length - 1] - ds[0]) / 86400000));
     const naDzien = total / dni;
     const byMat = {};
-    txx.forEach((t) => (t.pos || []).forEach((p) => { byMat[p.n] = byMat[p.n] || { val: 0, w: 0 }; byMat[p.n].val += p.w * p.price; byMat[p.n].w += p.w; }));
+    txx.forEach((t) => (t.pos || []).forEach((p) => { byMat[p.n] = byMat[p.n] || { val: 0, w: 0 }; byMat[p.n].val += lineVal(p); byMat[p.n].w += p.w; }));
     const topMat = Object.entries(byMat).sort((a, b) => b[1].val - a[1].val).slice(0, 5);
     const matTxt = topMat.map(([n, d]) => `${n} ${fz(d.val)} zł (${Math.round(d.val / total * 100)}%)`).join(", ");
     const matByName = {};
@@ -3702,7 +3715,7 @@ Twoja postawa i zasady:
         return `Jesteś dyrektorem marketingu z doświadczeniem w marketingu lokalnym dla skupów złomu w Polsce.\n${wspolne}\nEkspertyza: marketing lokalny offline i online (Facebook, OLX, Google Moja Firma), sezonowość (wiosna/jesień szczyt, zima spadek), budowanie marki, pozycjonowanie cenowe. Dawaj gotowe do wdrożenia plany z budżetami w zł i uzasadnieniem, dlaczego zadziała w branży złomowej.`;
     if (id === "sales")
         return `Jesteś szefem sprzedaży i ekspertem od pozyskiwania klientów dla skupów złomu w Polsce.\n${wspolne}\nEkspertyza: pozyskiwanie B2B (warsztaty, firmy budowlane, ekipy rozbiórkowe, hydraulicy, elektrycy), B2C, programy lojalnościowe, odbijanie klientów konkurencji, skrypty rozmów, retencja. Dawaj konkretne taktyki, gotowe skrypty i kwoty bonusów w zł z psychologią: dlaczego dostawca wybierze ten skup.`;
-    return `Jesteś doświadczonym doradcą podatkowym specjalizującym się w rozliczeniach skupów złomu w Polsce.\n${wspolne}\nWiedza: PCC 2% od zakupu od osób fizycznych powyżej 1000 zł (poniżej zwolnione, płaci skup), PCC-4 zbiorcza (min. 3 czynności, 3. w ciągu 14 dni od 1., termin do 7. dnia następnego miesiąca, zapłacony PCC to koszt), VAT i odwrotne obciążenie dla złomu, ZUS (ulga na start, mały ZUS), KUP (paliwo, transport, sprzęt, samochód N1, amortyzacja), legalna optymalizacja. ZAWSZE zaznacz, że to informacja ogólna, a decyzje wiążące warto potwierdzić z licencjonowanym księgowym. Nie podawaj porad jako pewników — tłumacz zasady i opcje.`;
+    return `Jesteś doświadczonym doradcą podatkowym specjalizującym się w rozliczeniach skupów złomu w Polsce.\n${wspolne}\nWiedza: PCC 2% od zakupu od osób fizycznych powyżej 3000 zł od 3.11.2026 (wcześniej 1000 zł; poniżej zwolnione, płaci skup; podstawa i podatek zaokrąglane do pełnych złotych), PCC-4 zbiorcza (min. 3 czynności, 3. w ciągu 14 dni od 1., termin do 7. dnia następnego miesiąca, zapłacony PCC to koszt), VAT dla złomu: od 1.11.2019 bez odwrotnego obciążenia — zasady ogólne + obowiązkowy split payment przy fakturach powyżej 15 000 zł brutto, ZUS (ulga na start, mały ZUS), KUP (paliwo, transport, sprzęt, samochód N1, amortyzacja), legalna optymalizacja. ZAWSZE zaznacz, że to informacja ogólna, a decyzje wiążące warto potwierdzić z licencjonowanym księgowym. Nie podawaj porad jako pewników — tłumacz zasady i opcje.`;
 }
 function DorAvatar({ akcent, glyf }) {
     return React.createElement("div", { style: { width: 30, height: 30, borderRadius: 9, background: `linear-gradient(145deg, ${akcent}, ${akcent}88)`, display: "grid", placeItems: "center", fontSize: 15, flexShrink: 0, boxShadow: "inset 0 1px 0 rgba(255,255,255,.2)" } }, glyf);
@@ -4119,7 +4132,12 @@ function KalkulatorZysku({ materials, stock, tx, kupMonth, kupTot, month }) {
     const extra = parseFloat(extraCost) || 0;
     const kupReal = (kupTot || 0) + extra;
     const netProfit = totGross - kupReal; // zysk netto po kosztach
-    const vat = vatMode ? Math.max(0, totGross * 0.23) : 0; // VAT od marży (wartości dodanej), nie od całego przychodu
+    // VAT (od 1.11.2019 złom bez odwrotnego obciążenia — zasady ogólne + split payment): należny 23% od sprzedaży,
+    // naliczony 23% tylko od zakupów od firm z fakturą VAT; od osób prywatnych (FPO) VAT-u do odliczenia nie ma.
+    const txM = (tx || []).filter((x) => month && dayKeyOf(x.ts).slice(0, 7) === month);
+    const skupM = txM.reduce((a, x) => a + txTotal(x), 0);
+    const firmShare = skupM > 0 ? txM.filter((x) => x.kind !== "FPO").reduce((a, x) => a + txTotal(x), 0) / skupM : 0;
+    const vat = vatMode ? Math.max(0, r2(totRevenue * 0.23 - totCost * firmShare * 0.23)) : 0;
     const netAfterVat = netProfit - vat;
     const avgMargin = totRevenue > 0 ? (totGross / totRevenue * 100) : 0;
     const fmt = v => v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " zł";
@@ -4136,7 +4154,7 @@ function KalkulatorZysku({ materials, stock, tx, kupMonth, kupTot, month }) {
             vatMode && React.createElement("div", { style: { fontSize: 14, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between" } },
                 React.createElement("span", { style: { color: "var(--muted)" } }, "Po VAT od mar\u017Cy (szac.):"),
                 React.createElement("span", { style: { fontFamily: "var(--mono)", fontWeight: 700 } }, fmt(netAfterVat))),
-            vatMode && React.createElement("div", { style: { fontSize: 12, color: "var(--faint)", marginTop: 8, lineHeight: 1.5 } }, "Szacunek: VAT 23% liczony od mar\u017Cy (sprzeda\u017C \u2212 zakup), nie od ca\u0142ego obrotu. Uwaga: skup z\u0142omu cz\u0119sto podlega odwrotnemu obci\u0105\u017Ceniu \u2014 rozliczenie potwierd\u017A z ksi\u0119gowym.")),
+            vatMode && React.createElement("div", { style: { fontSize: 12, color: "var(--faint)", marginTop: 8, lineHeight: 1.5 } }, `Szacunek: VAT nale\u017Cny 23% od sprzeda\u017Cy minus VAT naliczony tylko od zakup\u00F3w od firm (${Math.round(firmShare * 100)}% skupu w tym miesi\u0105cu). Od os\u00F3b prywatnych nie ma VAT do odliczenia. Z\u0142om od 1.11.2019: zasady og\u00F3lne + split payment (bez odwrotnego obci\u0105\u017Cenia). Potwierd\u017A z ksi\u0119gowym.`)),
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 } },
             React.createElement(Card, { pad: 13 },
                 React.createElement("div", { style: { fontSize: 12.5, color: "var(--muted)" } }, "Przych\u00F3d (sprzeda\u017C)"),
@@ -4215,7 +4233,7 @@ function RentownoscMaterialow({ tx, materials, stock, month }) {
         if (!obrotMat[p.matId])
             obrotMat[p.matId] = { masa: 0, wartosc: 0 };
         obrotMat[p.matId].masa += p.w;
-        obrotMat[p.matId].wartosc += p.w * p.price;
+        obrotMat[p.matId].wartosc += lineVal(p);
     }));
     // Analiza per materiał
     const analiza = (materials || []).map(m => {
@@ -4519,14 +4537,14 @@ function HistoriaZyskow({ tx, materials, kupTot, month, dispatch }) {
 /* ─────────── Eksport PCC-4 (deklaracja zbiorcza) ─────────── */
 function PCC4Export({ tx, company, month, setMonth }) {
     const [stawka] = useState(2); // PCC 2%
-    const [prog] = useState(1000); // zwolnienie poniżej 1000 zł
+    const prog = pccProg(new Date(month + "-28T12:00:00").getTime()); // próg zwolnienia (1000 zł, od 3.11.2026 — 3000 zł); każda transakcja sprawdzana wg swojej daty
     // Tylko FPO (zakup od osób fizycznych) w danym miesiącu
     const fpoMonth = (tx || []).filter(x => x.kind === "FPO" && fmtDateKey(x.ts).slice(0, 7) === month);
-    // Tylko transakcje > 1000 zł podlegają PCC (poniżej = zwolnienie ustawowe)
-    const podlegajace = fpoMonth.map(x => ({ ...x, wartosc: txTotal(x) })).filter(x => x.wartosc > prog).sort((a, b) => a.ts - b.ts);
-    const zwolnione = fpoMonth.filter(x => txTotal(x) <= prog);
+    // Tylko transakcje powyżej progu (pccProg wg daty) podlegają PCC
+    const podlegajace = fpoMonth.map(x => ({ ...x, wartosc: Math.round(txTotal(x)), podatekTx: pccOf(x) })).filter(x => x.podatekTx > 0 || txTotal(x) > pccProg(x.ts)).sort((a, b) => a.ts - b.ts);
+    const zwolnione = fpoMonth.filter(x => txTotal(x) <= pccProg(x.ts));
     const podstawa = podlegajace.reduce((a, x) => a + x.wartosc, 0);
-    const podatek = podstawa * (stawka / 100);
+    const podatek = podlegajace.reduce((a, x) => a + x.podatekTx, 0);
     // Warunek PCC-4: min 3 czynności, ostatnia z pierwszych 3 w ciągu 14 dni od pierwszej
     const moznaPCC4 = (() => {
         if (podlegajace.length < 3)
@@ -4564,7 +4582,7 @@ function PCC4Export({ tx, company, month, setMonth }) {
             t += "   Dok. tożsam.: " + (x.osoba.dowod || "—") + "\n";
             t += "   Dokument:    " + x.no + "\n";
             t += "   Wartość:     " + x.wartosc.toFixed(2) + " zł\n";
-            t += "   PCC 2%:      " + (x.wartosc * 0.02).toFixed(2) + " zł\n";
+            t += "   PCC 2%:      " + x.podatekTx + " zł\n";
         });
         t += "\n───────────────────────────────────────────────────────\n";
         t += "PODSUMOWANIE:\n";
@@ -4588,7 +4606,7 @@ function PCC4Export({ tx, company, month, setMonth }) {
     const buildCSV = () => {
         let c = "Lp;Data;Imie;Nazwisko;Adres;Dokument tozsamosci;Nr dokumentu;Wartosc zl;PCC 2% zl\n";
         podlegajace.forEach((x, i) => {
-            c += [i + 1, fmtDateKey(x.ts), x.osoba.imie, x.osoba.nazwisko, (x.osoba.adres || "").replace(/;/g, ","), x.osoba.dowod || "", x.no, x.wartosc.toFixed(2), (x.wartosc * 0.02).toFixed(2)].join(";") + "\n";
+            c += [i + 1, fmtDateKey(x.ts), x.osoba.imie, x.osoba.nazwisko, (x.osoba.adres || "").replace(/;/g, ","), x.osoba.dowod || "", x.no, x.wartosc.toFixed(2), String(x.podatekTx)].join(";") + "\n";
         });
         c += ";;;;;;;RAZEM:;" + podatek.toFixed(2) + "\n";
         return c;
@@ -4652,7 +4670,7 @@ function PCC4Export({ tx, company, month, setMonth }) {
                     React.createElement("div", { style: { fontFamily: "var(--mono)", fontWeight: 800, fontSize: 15 } }, fmt(x.wartosc)),
                     React.createElement("div", { style: { fontSize: 13, color: "var(--copper)", fontWeight: 700, marginTop: 2 } },
                         "PCC: ",
-                        (x.wartosc * 0.02).toFixed(2),
+                        x.podatekTx,
                         " z\u0142")))))),
         zwolnione.length > 0 && (React.createElement(React.Fragment, null,
             React.createElement("div", { style: sectionTitle },
@@ -4678,7 +4696,8 @@ function PCC4Export({ tx, company, month, setMonth }) {
                 " (skup) od zakupu od os\u00F3b fizycznych.",
                 React.createElement("br", null),
                 "\u2022 Transakcje ",
-                React.createElement("b", { style: { color: "var(--text)" } }, "do 1000 z\u0142 s\u0105 zwolnione"),
+                React.createElement("b", { style: { color: "var(--text)" } }, "do 3000 z\u0142 s\u0105 zwolnione"),
+                " (od 3.11.2026; wcze\u015Bniej do 1000 z\u0142)",
                 " ustawowo.",
                 React.createElement("br", null),
                 "\u2022 Zakup od ",
@@ -4727,7 +4746,7 @@ function Ksiegowosc({ tx, materials, stock, company, dispatch }) {
     const fpo = inM.filter((x) => x.kind === "FPO");
     const kpo = inM.filter((x) => x.kind === "KPO");
     const fpoTot = fpo.reduce((a, x) => a + txTotal(x), 0);
-    const pcc = fpoTot * 0.02;
+    const pcc = fpo.reduce((a, x) => a + pccOf(x), 0);
     const magVal = materials.reduce((a, m) => a + (stock[m.id] || 0) * m.buy, 0);
     const mass = inM.reduce((a, x) => a + txMass(x), 0);
     const kupMonth = kupItems.filter(k => (k.date || "").slice(0, 7) === month);

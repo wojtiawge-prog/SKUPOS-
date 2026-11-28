@@ -51,7 +51,7 @@ console.log("SkupOS e2e");
   await p.getByPlaceholder("Nr dowodu").fill("ABC123456");
   await p.locator("button").filter({ hasText: /Dodaj pozycję z cennika/ }).click(); await p.waitForTimeout(400);
   await p.locator("button").filter({ hasText: /\d zł$/ }).first().click(); await p.waitForTimeout(300);
-  await p.locator("input[type=number]").first().fill("12.5");
+  await p.locator("input[inputmode=decimal]").first().fill("12.5");
   await p.getByRole("button", { name: "Własne gospodarstwo domowe" }).click();
   await p.getByRole("button", { name: "Rury i rynny" }).click();
   await p.evaluate(() => [...document.querySelectorAll("input[type=checkbox]")].forEach((x) => { if (!x.checked) x.click(); }));
@@ -80,7 +80,7 @@ console.log("SkupOS e2e");
   // dane pokazowe są losowe: stały klient może być osobą fizyczną (FPO) — wtedy wymagane źródło pochodzenia
   const zr = p.getByRole("button", { name: "Własne gospodarstwo domowe" });
   if (await zr.count()) await zr.click();
-  const ins = p.locator("input[type=number]"); const k = await ins.count();
+  const ins = p.locator("input[inputmode=decimal]"); const k = await ins.count();
   for (let i = 0; i < k; i += 2) await ins.nth(i).fill("150");
   await p.evaluate(() => [...document.querySelectorAll("input[type=checkbox]")].forEach((x) => { if (!x.checked) x.click(); }));
   await p.locator("button").filter({ hasText: /Zapisz i wystaw|wypłać/ }).last().click(); await p.waitForTimeout(1500);
